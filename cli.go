@@ -61,6 +61,10 @@ func (a app) run(ctx context.Context, args []string, loadedDotenv map[string]boo
 		return a.cmdState(ctx, args[1:], loadedDotenv)
 	case "member":
 		return a.cmdMember(ctx, args[1:], loadedDotenv)
+	case "work":
+		return a.cmdWork(ctx, args[1:], loadedDotenv)
+	case "search":
+		return a.cmdSearch(ctx, args[1:], loadedDotenv)
 	case "help", "--help", "-h":
 		printUsage(a.stdout)
 		return exitOK
@@ -84,6 +88,13 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  plane-cli project get <project> [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli state list --project <project> [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli member list --project <project> [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work list --project <project> [--state-group <group>] [--limit <n>] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work get <PROJECT-123> [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work create --project <project> --title <title> [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work edit <PROJECT-123> [--title <title>] [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work comment <PROJECT-123> --html <html> [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work start|complete|reopen|cancel <PROJECT-123> [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli search <query> [--project <project>] [--max-results <n>] [--format text|json]")
 }
 
 func parseFormat(args []string) (string, []string, *cliError) {
