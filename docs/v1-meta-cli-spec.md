@@ -16,6 +16,8 @@ Supported platforms for V1: Unix only — Linux and macOS.
 
 Binary name: `plane-cli`.
 
+Dependency constraint for V1: use the Go standard library only. Add third-party dependencies only after an explicit design decision.
+
 ## Configuration
 
 Use XDG-style config on Unix:
