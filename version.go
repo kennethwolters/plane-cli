@@ -21,6 +21,10 @@ func currentVersionData() versionData {
 			"plane.auth.status.v1",
 			"plane.doctor.v1",
 			"plane.resolve.v1",
+			"plane.project.list.v1",
+			"plane.project.get.v1",
+			"plane.state.list.v1",
+			"plane.member.list.v1",
 			"plane.error.v1",
 		},
 	}
