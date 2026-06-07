@@ -32,20 +32,23 @@ PLANE_WORKSPACE_SLUG=...
 PLANE_BASE_URL=...
 ```
 
-No default `PLANE_BASE_URL`. The user must provide it explicitly.
+The CLI also auto-loads a `.env` file from the current working directory only. Existing process environment variables win over `.env` values.
+
+No default `PLANE_BASE_URL`. The user must provide it explicitly, including the URL scheme such as `https://`.
 
 Precedence:
 
-1. command flags
-2. environment variables
-3. config file
-4. no implicit default
+1. command-local flags
+2. process environment variables
+3. current-directory `.env`
+4. config file
+5. no implicit default
 
 ## Secrets
 
 Never store the PAT/API key in the config file.
 
-`PLANE_API_KEY` is read from the process environment or local `.env` during development only. `config set` must reject attempts to store API keys.
+`PLANE_API_KEY` is read from the process environment or current-directory `.env`. `config set` must reject attempts to store API keys.
 
 Safe config fields may include:
 
@@ -57,7 +60,7 @@ Safe config fields may include:
 
 ### `plane-cli version`
 
-Show version/build metadata.
+Show version/build metadata. `plane-cli --version` remains a text-output alias.
 
 Flags:
 
@@ -110,6 +113,7 @@ Behavior:
 - require workspace slug
 - require base URL
 - call Plane's `GET /api/v1/users/me/`
+- authenticate PAT requests with `X-API-Key: <token>`
 - return typed errors for missing/invalid config
 
 Flags:

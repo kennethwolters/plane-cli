@@ -1,27 +1,16 @@
 package main
 
 import (
-	"flag"
-	"fmt"
+	"context"
 	"os"
 )
 
-var version = "dev"
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
+)
 
 func main() {
-	flags := flag.NewFlagSet("plane-cli", flag.ExitOnError)
-	showVersion := flags.Bool("version", false, "print version")
-	flags.Usage = func() {
-		fmt.Fprintf(flags.Output(), "plane-cli is a work-in-progress Plane.so CLI.\n\nUsage:\n  plane-cli [--version]\n\n")
-		flags.PrintDefaults()
-	}
-
-	if err := flags.Parse(os.Args[1:]); err != nil {
-		os.Exit(2)
-	}
-	if *showVersion {
-		fmt.Println(version)
-		return
-	}
-	flags.Usage()
+	os.Exit(run(context.Background(), os.Args[1:], os.Stdout, os.Stderr))
 }
