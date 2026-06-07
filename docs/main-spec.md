@@ -311,6 +311,63 @@ plane-cli raw delete <path> [--format json]
 
 `raw` is for debugging and API gaps. It should still apply auth, base URL config, redaction, and error mapping.
 
+## Pareto-optimal 80% target
+
+The goal is not full Plane API parity. The goal is an 80%-useful CLI for agent-driven workspace operation: agents can safely find, understand, create, update, move, and verify most work without raw API calls.
+
+Required capability groups for that state:
+
+1. **Work item core**
+   - `work list`
+   - `work get`
+   - `work create`
+   - `work edit`
+   - `work comment`
+
+2. **Safe lifecycle operations**
+   - `work start`
+   - `work complete --evidence`
+   - `work reopen --reason`
+   - `work cancel --reason`
+   - state-group-driven transitions, not brittle local state-name guesses
+
+3. **Relations and blockers**
+   - `graph blockers`
+   - `work block`
+   - `work unblock`
+   - `work relate`
+   - `work unlink`
+
+4. **Planning containers**
+   - `cycle list/get/add/remove`
+   - `module list/get/add/remove`
+   - before/after membership diffs for mutations
+
+5. **Search and ambiguity handling**
+   - `search <query>`
+   - improved `resolve` for vague references and candidate lists
+   - typed `AMBIGUOUS_REFERENCE` output instead of guessing
+
+6. **Context and diagnosis**
+   - `context <work-item>`
+   - `diagnose <work-item> --why-stuck`
+   - `missing acceptance-criteria|owner|evidence|blocker-link`
+
+7. **Operation safety**
+   - operation plans for mutations
+   - `--dry-run`, `--apply`, `--verify`
+   - `apply`
+   - `verify`
+   - minimal local operation log
+
+8. **Pagination and error hardening**
+   - cursor pagination helper
+   - stable API error mapping
+   - validation errors exposed cleanly
+   - no secret leakage tests around every command family
+
+At that point, the CLI is likely 70-80% useful for real agent operation even though it is not API-complete.
+
 ## Pareto implementation order
 
 The smallest command sequence that unlocks most agent value:
@@ -318,15 +375,16 @@ The smallest command sequence that unlocks most agent value:
 1. `project list`, `project get`, `state list`, `member list`
 2. `work get`, `work list`, `search`
 3. `work create`, `work edit`, `work comment`
-4. `work start`, `work complete`, `work reopen`
-5. `graph blockers`, `work block`, `work unblock`, `work relate`
-6. `cycle list/get/add/remove`
-7. `context`, `diagnose`, `missing`
-8. `worklog add/list`, `work prove-done`
-9. `module` commands
-10. `intake` and `triage`
-11. `page` and `link` commands
-12. `ops` and `raw`
+4. `work start`, `work complete`, `work reopen`, `work cancel`
+5. mutation operation model: `--dry-run`, `--apply`, `--verify`, `apply`, `verify`
+6. `graph blockers`, `work block`, `work unblock`, `work relate`, `work unlink`
+7. `cycle list/get/add/remove`
+8. `module list/get/add/remove`
+9. `context`, `diagnose`, `missing`
+10. `worklog add/list`, `work prove-done`
+11. `intake` and `triage`
+12. `page` and `link` commands
+13. `ops` and `raw`
 
 ## Stable error families
 
