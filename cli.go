@@ -55,6 +55,12 @@ func (a app) run(ctx context.Context, args []string, loadedDotenv map[string]boo
 		return a.cmdDoctor(ctx, args[1:], loadedDotenv)
 	case "resolve":
 		return a.cmdResolve(ctx, args[1:], loadedDotenv)
+	case "project":
+		return a.cmdProject(ctx, args[1:], loadedDotenv)
+	case "state":
+		return a.cmdState(ctx, args[1:], loadedDotenv)
+	case "member":
+		return a.cmdMember(ctx, args[1:], loadedDotenv)
 	case "help", "--help", "-h":
 		printUsage(a.stdout)
 		return exitOK
@@ -74,6 +80,10 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  plane-cli auth status [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli doctor [--for-agent] [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli resolve <PROJECT-123> [--format text|json] [--no-cache]")
+	fmt.Fprintln(w, "  plane-cli project list [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli project get <project> [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli state list --project <project> [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli member list --project <project> [--format text|json]")
 }
 
 func parseFormat(args []string) (string, []string, *cliError) {
@@ -111,6 +121,38 @@ func hasFlag(args []string, name string) ([]string, bool) {
 		out = append(out, arg)
 	}
 	return out, found
+}
+
+func parseRequiredStringFlag(args []string, name, missingMessage string) (string, []string, *cliError) {
+	value, rest, ok := parseStringFlag(args, name)
+	if !ok || value == "" {
+		return "", rest, newError("MISSING_PROJECT_REFERENCE", missingMessage, "Pass "+name+" with a Plane project identifier or UUID.", false)
+	}
+	return value, rest, nil
+}
+
+func parseStringFlag(args []string, name string) (string, []string, bool) {
+	out := make([]string, 0, len(args))
+	found := false
+	value := ""
+	prefix := name + "="
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == name:
+			found = true
+			if i+1 < len(args) {
+				value = args[i+1]
+				i++
+			}
+		case strings.HasPrefix(arg, prefix):
+			found = true
+			value = strings.TrimPrefix(arg, prefix)
+		default:
+			out = append(out, arg)
+		}
+	}
+	return value, out, found
 }
 
 func (a app) usageError(message, format string) int {

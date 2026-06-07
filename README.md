@@ -22,3 +22,5 @@ plane-cli resolve ENG-42 --format json
 ```
 
 Configuration is PAT-first via `PLANE_API_KEY`, `PLANE_WORKSPACE_SLUG`, and `PLANE_BASE_URL`. The CLI never stores API keys.
+
+See `docs/main-spec.md` for the planned core command surface.

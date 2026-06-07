@@ -35,6 +35,31 @@ type resolvedWorkItem struct {
 	StateID           string `json:"state_id,omitempty"`
 }
 
+type projectSummary struct {
+	ID              string `json:"id"`
+	Identifier      string `json:"identifier"`
+	Name            string `json:"name"`
+	DescriptionText string `json:"description_text,omitempty"`
+	ArchivedAt      string `json:"archived_at,omitempty"`
+}
+
+type stateSummary struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Group   string `json:"group"`
+	Color   string `json:"color,omitempty"`
+	Default bool   `json:"default"`
+	Slug    string `json:"slug,omitempty"`
+}
+
+type memberSummary struct {
+	ID          string `json:"id"`
+	Email       string `json:"email,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+	FirstName   string `json:"first_name,omitempty"`
+	LastName    string `json:"last_name,omitempty"`
+}
+
 func newPlaneClient(eff effectiveConfig, httpClient *http.Client) planeClient {
 	return planeClient{
 		baseURL:       strings.TrimRight(eff.BaseURL.Value, "/"),
@@ -48,6 +73,92 @@ func (c planeClient) getMe(ctx context.Context) (meResponse, *cliError) {
 	var me meResponse
 	err := c.getJSON(ctx, "/api/v1/users/me/", &me)
 	return me, err
+}
+
+func (c planeClient) listProjects(ctx context.Context) ([]projectSummary, *cliError) {
+	endpoint := "/api/v1/workspaces/" + url.PathEscape(c.workspaceSlug) + "/projects/"
+	var raw any
+	if err := c.getJSON(ctx, endpoint, &raw); err != nil {
+		return nil, err
+	}
+	items := extractResultMaps(raw)
+	projects := make([]projectSummary, 0, len(items))
+	for _, item := range items {
+		projects = append(projects, projectSummary{
+			ID:              stringFromMap(item, "id"),
+			Identifier:      stringFromMap(item, "identifier"),
+			Name:            stringFromMap(item, "name"),
+			DescriptionText: stringFromMap(item, "description_text", "description"),
+			ArchivedAt:      stringFromMap(item, "archived_at"),
+		})
+	}
+	return projects, nil
+}
+
+func (c planeClient) getProjectByRef(ctx context.Context, ref string) (projectSummary, *cliError) {
+	projects, err := c.listProjects(ctx)
+	if err != nil {
+		return projectSummary{}, err
+	}
+	for _, project := range projects {
+		if sameRef(project.ID, ref) || sameRef(project.Identifier, ref) || sameRef(project.Name, ref) {
+			return project, nil
+		}
+	}
+	return projectSummary{}, newError("PROJECT_NOT_FOUND", "Project not found: "+ref, "Use plane-cli project list --format json to find the project identifier or UUID.", true, "plane-cli project list --format json")
+}
+
+func (c planeClient) listProjectStates(ctx context.Context, projectID string) ([]stateSummary, *cliError) {
+	endpoint := "/api/v1/workspaces/" + url.PathEscape(c.workspaceSlug) + "/projects/" + url.PathEscape(projectID) + "/states/"
+	var raw any
+	if err := c.getJSON(ctx, endpoint, &raw); err != nil {
+		if err.Code == "RESOURCE_NOT_FOUND" {
+			return nil, newError("PROJECT_NOT_FOUND", "Project not found: "+projectID, "Use plane-cli project list --format json to find a valid project.", true)
+		}
+		return nil, err
+	}
+	items := extractResultMaps(raw)
+	states := make([]stateSummary, 0, len(items))
+	for _, item := range items {
+		states = append(states, stateSummary{
+			ID:      stringFromMap(item, "id"),
+			Name:    stringFromMap(item, "name"),
+			Group:   stringFromMap(item, "group"),
+			Color:   stringFromMap(item, "color"),
+			Default: boolFromMap(item, "default"),
+			Slug:    stringFromMap(item, "slug"),
+		})
+	}
+	return states, nil
+}
+
+func (c planeClient) listProjectMembers(ctx context.Context, projectID string) ([]memberSummary, *cliError) {
+	endpoint := "/api/v1/workspaces/" + url.PathEscape(c.workspaceSlug) + "/projects/" + url.PathEscape(projectID) + "/members/"
+	var raw any
+	if err := c.getJSON(ctx, endpoint, &raw); err != nil {
+		if err.Code == "RESOURCE_NOT_FOUND" {
+			return nil, newError("PROJECT_NOT_FOUND", "Project not found: "+projectID, "Use plane-cli project list --format json to find a valid project.", true)
+		}
+		return nil, err
+	}
+	items := extractResultMaps(raw)
+	members := make([]memberSummary, 0, len(items))
+	for _, item := range items {
+		if nested, ok := item["member"].(map[string]any); ok {
+			item = nested
+		}
+		if nested, ok := item["user"].(map[string]any); ok {
+			item = nested
+		}
+		members = append(members, memberSummary{
+			ID:          stringFromMap(item, "id"),
+			Email:       stringFromMap(item, "email"),
+			DisplayName: stringFromMap(item, "display_name"),
+			FirstName:   stringFromMap(item, "first_name"),
+			LastName:    stringFromMap(item, "last_name"),
+		})
+	}
+	return members, nil
 }
 
 func (c planeClient) resolveWorkItem(ctx context.Context, projectIdentifier, number string) (resolvedWorkItem, *cliError) {
@@ -121,6 +232,31 @@ func (c planeClient) getJSON(ctx context.Context, endpoint string, out any) *cli
 	}
 }
 
+func extractResultMaps(raw any) []map[string]any {
+	var values []any
+	switch v := raw.(type) {
+	case []any:
+		values = v
+	case map[string]any:
+		if results, ok := v["results"].([]any); ok {
+			values = results
+		} else {
+			values = []any{v}
+		}
+	}
+	items := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		if item, ok := value.(map[string]any); ok {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+func sameRef(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
+}
+
 func stringFromMap(m map[string]any, keys ...string) string {
 	for _, key := range keys {
 		value, ok := m[key]
@@ -139,4 +275,13 @@ func stringFromMap(m map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func boolFromMap(m map[string]any, key string) bool {
+	value, ok := m[key]
+	if !ok {
+		return false
+	}
+	b, ok := value.(bool)
+	return ok && b
 }
