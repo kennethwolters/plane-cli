@@ -138,6 +138,28 @@ Agent
   -> Plane workspace
 ```
 
+### Plane MCP alpha to exploit
+
+Plane's MCP server is a useful map of the raw surface. It exposes 100+ tools across roughly 20 modules, including users, workspaces, projects, work items, activities, comments, links, relations, custom properties, work item types, worklogs, states, labels, cycles, modules, epics, milestones, initiatives, intake, and pages.
+
+Design implications:
+
+- **Identifier translation is core.** Plane has readable work item IDs like `ENG-42`, but most tools require UUIDs for `project_id`, `work_item_id`, `cycle_id`, etc. The CLI should make `plane resolve ENG-42` and internal UUID resolution first-class, cacheable, and visible in JSON output.
+- **MCP's breadth creates multi-call workflows.** A simple request like "mark ENG-88 done and comment" requires resolving the work item, listing states to find the Done UUID, updating the item, then creating an HTML comment. The CLI can compress these into one semantic operation with dry-run/apply/verify.
+- **Workspace search is powerful but conditional.** MCP `list_work_items` switches to advanced search when filters are present and can search workspace-wide. The CLI should expose that deliberately: `plane search`, `plane resolve`, and `plane missing` should show whether they used project list mode or workspace search mode.
+- **State groups are more stable than state names.** Plane state groups include `backlog`, `unstarted`, `started`, `completed`, and `cancelled`; local state names vary by project. Agent-facing commands should reason in groups when possible and resolve project-specific state UUIDs at apply time.
+- **Relations are project graph primitives.** MCP relation types include `blocking`, `blocked_by`, `duplicate_of`, `duplicate`, and `relates_to`. This validates making `plane graph`, `plane work unblock`, `plane work merge`, and `plane diagnose --why-stuck` central, not optional extras.
+- **Comments are HTML.** Semantic communication commands (`ask`, `nudge`, `handoff`, `escalate`, `prove-done`) should own safe HTML rendering instead of letting agents hand-roll comment markup.
+- **Worklogs are minutes.** Time logging should avoid ambiguous human strings at the API boundary. Accept friendly input if useful, but emit normalized minutes and show exactly what will be logged.
+- **Cycles and modules are first-class planning containers.** MCP has transfer/add/remove/list tools for cycles and modules. The CLI should support what-if planning and diffable movement between cycles/modules, not just item mutation.
+- **Intake and initiatives matter.** Intake is the triage queue; initiatives are workspace-scoped strategy. `plane triage`, `plane intake`, and `plane initiative` may become useful higher-level surfaces later.
+- **Pages are context sources.** Plane pages can be workspace- or project-scoped. Context capsules should be able to cite relevant pages without dumping full page bodies by default.
+- **Auth mode shapes UX.** MCP supports hosted HTTP with OAuth, HTTP with PAT headers, local stdio via `PLANE_API_KEY`/`PLANE_WORKSPACE_SLUG`/`PLANE_BASE_URL`, and legacy SSE. The CLI should support PAT/workspace/base-url cleanly for automation and self-hosting; OAuth can be added if human login becomes important.
+- **Self-hosting has two URLs.** MCP distinguishes `PLANE_BASE_URL` from `PLANE_INTERNAL_BASE_URL` for server-to-server calls. The CLI should at least model public API base URL explicitly and not assume Plane Cloud.
+- **Troubleshooting should be typed.** MCP propagates SDK/API errors for invalid key, expired OAuth token, missing workspace slug, wrong slug, insufficient permissions, not found, validation errors, Redis/token storage issues, and network errors. The CLI should map these to stable error codes and `plane doctor` checks.
+
+The raw MCP workflows are good evidence that the CLI's value is not access. Access already exists. The value is reducing four or five brittle primitive calls into one reviewable operation with typed ambiguity and verification.
+
 ## Extra design bias
 
 ### From Mario Zechner-style agent tooling
@@ -181,9 +203,11 @@ Not a commitment, but useful examples:
 # setup / health
 plane whoami --format json
 plane doctor --for-agent
+plane auth status --format json
 plane budget status
 
 # resolution / context
+plane resolve ENG-42 --format json
 plane resolve "oauth bug" --format json
 plane context ENG-42 --capsule agent
 plane context project WEB --token-budget 4000
@@ -198,6 +222,11 @@ plane missing blocker-link --cycle current
 plane graph blockers ENG-42
 plane graph critical-path --cycle current
 plane graph unblock-plan --project WEB
+plane graph duplicates --project WEB
+
+# planning containers
+plane cycle transfer-incomplete --from "Sprint 14" --to "Sprint 15" --dry-run
+plane module move ENG-55 --to "Checkout Redesign" --dry-run
 
 # semantic operations
 plane work clarify ENG-42 --field acceptance-criteria --dry-run
@@ -212,6 +241,7 @@ plane ask ENG-42 --for "decision from design" --dry-run
 plane nudge ENG-42 --style polite --dry-run
 plane escalate ENG-42 --because "blocked 5 days" --dry-run
 plane handoff ENG-42 --to @alice --include context,risks,next-actions
+plane worklog ENG-42 --minutes 90 --note "Implemented retry logic" --dry-run
 
 # operation lifecycle
 plane apply op_123 --verify
@@ -228,6 +258,7 @@ plane raw work-item update ENG-42 --state done --unsafe-reason "manual override"
 ## References
 
 - Supplied agent-native CLI report in the initial project notes.
+- Plane MCP server spec: <https://developers.plane.so/dev-tools/mcp-server>
 - Mario Zechner: <https://mariozechner.at/posts/2025-11-30-pi-coding-agent/>
 - Mario Zechner: <https://mariozechner.at/posts/2025-08-15-mcp-vs-cli/>
 - Armin Ronacher: <https://lucumr.pocoo.org/>
