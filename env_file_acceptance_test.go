@@ -84,7 +84,8 @@ func TestDoctorReportsEnvFileSourcesAndRedacts(t *testing.T) {
 	env := parseEnvelope(t, res.stdout)
 	checks := env["data"].(map[string]any)["checks"].([]any)
 	apiKeyCheck := findDoctorCheck(t, checks, "api_key")
-	if apiKeyCheck["source"] != "env_file" || apiKeyCheck["path"] != envPath || apiKeyCheck["message"] != "configured" {
+	gotPath, _ := apiKeyCheck["path"].(string)
+	if apiKeyCheck["source"] != "env_file" || canonicalTestPath(t, gotPath) != canonicalTestPath(t, envPath) || apiKeyCheck["message"] != "configured" {
 		t.Fatalf("unexpected api_key check: %#v", apiKeyCheck)
 	}
 }
@@ -108,6 +109,19 @@ func fakeAuthPlane(t *testing.T, apiKey string) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"id":"user-1","email":"agent@example.test"}`)
 	}))
+}
+
+func canonicalTestPath(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		return resolved
+	}
+	abs, err := filepath.Abs(path)
+	if err == nil {
+		return abs
+	}
+	return path
 }
 
 func findDoctorCheck(t *testing.T, checks []any, name string) map[string]any {
