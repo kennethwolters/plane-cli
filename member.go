@@ -12,7 +12,7 @@ type memberListData struct {
 	Count         int             `json:"count"`
 }
 
-func (a app) cmdMember(ctx context.Context, args []string, loadedDotenv map[string]bool) int {
+func (a app) cmdMember(ctx context.Context, args []string, configCtx configContext) int {
 	if len(args) == 0 {
 		return a.usageError("member requires a subcommand", "text")
 	}
@@ -30,11 +30,11 @@ func (a app) cmdMember(ctx context.Context, args []string, loadedDotenv map[stri
 	if len(rest) != 0 {
 		return a.usageError("member list takes no positional arguments", format)
 	}
-	return a.cmdMemberList(ctx, format, loadedDotenv, projectRef)
+	return a.cmdMemberList(ctx, format, configCtx, projectRef)
 }
 
-func (a app) cmdMemberList(ctx context.Context, format string, loadedDotenv map[string]bool, projectRef string) int {
-	eff, client, ok := a.configuredPlaneClient(format, loadedDotenv)
+func (a app) cmdMemberList(ctx context.Context, format string, configCtx configContext, projectRef string) int {
+	eff, client, ok := a.configuredPlaneClient(format, configCtx)
 	if !ok {
 		return exitError
 	}

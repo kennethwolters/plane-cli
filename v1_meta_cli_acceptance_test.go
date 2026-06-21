@@ -174,7 +174,11 @@ type cliResult struct {
 
 func runCLI(t *testing.T, extraEnv map[string]string, args ...string) cliResult {
 	t.Helper()
-	workDir := t.TempDir()
+	return runCLIInDir(t, t.TempDir(), extraEnv, args...)
+}
+
+func runCLIInDir(t *testing.T, workDir string, extraEnv map[string]string, args ...string) cliResult {
+	t.Helper()
 	home := t.TempDir()
 	xdg := filepath.Join(home, "xdg")
 	cmd := exec.Command(testBinary, args...)
@@ -197,6 +201,23 @@ func runCLI(t *testing.T, extraEnv map[string]string, args ...string) cliResult 
 		}
 	}
 	return cliResult{stdout: stdout.String(), stderr: stderr.String(), code: code}
+}
+
+func writeTestEnvFile(t *testing.T, path string, values map[string]string) {
+	t.Helper()
+	var b strings.Builder
+	for key, value := range values {
+		b.WriteString(key)
+		b.WriteString("=")
+		b.WriteString(value)
+		b.WriteString("\n")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func cleanEnv(env []string) []string {

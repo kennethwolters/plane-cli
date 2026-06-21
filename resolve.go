@@ -9,7 +9,7 @@ import (
 
 var readableRefPattern = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]{0,11})-([0-9]+)$`)
 
-func (a app) cmdResolve(ctx context.Context, args []string, loadedDotenv map[string]bool) int {
+func (a app) cmdResolve(ctx context.Context, args []string, configCtx configContext) int {
 	args, _ = hasFlag(args, "--no-cache")
 	format, rest, err := parseFormat(args)
 	if err != nil {
@@ -22,7 +22,10 @@ func (a app) cmdResolve(ctx context.Context, args []string, loadedDotenv map[str
 	if parseErr != nil {
 		return a.writeCLIError(parseErr, format)
 	}
-	eff, cfgErr := loadEffectiveConfig(loadedDotenv)
+	if envErr := configCtx.blockingEnvFileError(); envErr != nil {
+		return a.writeCLIError(envErr, format)
+	}
+	eff, cfgErr := loadEffectiveConfig(configCtx)
 	if cfgErr != nil {
 		return a.writeCLIError(cfgErr, format)
 	}

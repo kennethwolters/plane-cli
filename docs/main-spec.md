@@ -7,7 +7,7 @@ This is the high-level command-surface spec for `plane-cli` after the V1 meta sl
 - Binary name: `plane-cli`.
 - Go standard library only unless a future design decision explicitly allows a dependency.
 - Plane PAT auth uses `X-API-Key`.
-- Never store API keys; read `PLANE_API_KEY` from environment or current-directory `.env`.
+- Never store API keys; read `PLANE_API_KEY` from process env, explicit env files, cwd/ancestor `.env`, or safe config sources according to precedence.
 - Every important command supports deterministic JSON via `--format json`.
 - stdout is data; stderr is diagnostics/progress.
 - Mutations must be reviewable and verifiable: plan/dry-run first, then apply, then verify.

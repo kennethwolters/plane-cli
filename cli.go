@@ -22,12 +22,42 @@ type app struct {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	loadedDotenv := loadDotenv(".env")
 	a := app{stdout: stdout, stderr: stderr, client: http.DefaultClient}
-	return a.run(ctx, args, loadedDotenv)
+	global, rest, err := parseGlobalFlags(args)
+	if err != nil {
+		return a.writeCLIError(err, "text")
+	}
+	configCtx := buildConfigContext(global.EnvFile)
+	return a.run(ctx, rest, configCtx)
 }
 
-func (a app) run(ctx context.Context, args []string, loadedDotenv map[string]bool) int {
+type globalFlags struct {
+	EnvFile string
+}
+
+func parseGlobalFlags(args []string) (globalFlags, []string, *cliError) {
+	var flags globalFlags
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--env-file":
+			if i+1 >= len(args) {
+				return flags, out, newError("USAGE_ERROR", "--env-file requires a path.", "Pass --env-file <path> before the command.", false)
+			}
+			flags.EnvFile = args[i+1]
+			i++
+		case strings.HasPrefix(arg, "--env-file="):
+			flags.EnvFile = strings.TrimPrefix(arg, "--env-file=")
+		default:
+			out = append(out, args[i:]...)
+			return flags, out, nil
+		}
+	}
+	return flags, out, nil
+}
+
+func (a app) run(ctx context.Context, args []string, configCtx configContext) int {
 	if len(args) == 0 {
 		printUsage(a.stdout)
 		return exitOK
@@ -48,23 +78,23 @@ func (a app) run(ctx context.Context, args []string, loadedDotenv map[string]boo
 		}
 		return a.cmdVersion(format)
 	case "config":
-		return a.cmdConfig(args[1:], loadedDotenv)
+		return a.cmdConfig(args[1:], configCtx)
 	case "auth":
-		return a.cmdAuth(ctx, args[1:], loadedDotenv)
+		return a.cmdAuth(ctx, args[1:], configCtx)
 	case "doctor":
-		return a.cmdDoctor(ctx, args[1:], loadedDotenv)
+		return a.cmdDoctor(ctx, args[1:], configCtx)
 	case "resolve":
-		return a.cmdResolve(ctx, args[1:], loadedDotenv)
+		return a.cmdResolve(ctx, args[1:], configCtx)
 	case "project":
-		return a.cmdProject(ctx, args[1:], loadedDotenv)
+		return a.cmdProject(ctx, args[1:], configCtx)
 	case "state":
-		return a.cmdState(ctx, args[1:], loadedDotenv)
+		return a.cmdState(ctx, args[1:], configCtx)
 	case "member":
-		return a.cmdMember(ctx, args[1:], loadedDotenv)
+		return a.cmdMember(ctx, args[1:], configCtx)
 	case "work":
-		return a.cmdWork(ctx, args[1:], loadedDotenv)
+		return a.cmdWork(ctx, args[1:], configCtx)
 	case "search":
-		return a.cmdSearch(ctx, args[1:], loadedDotenv)
+		return a.cmdSearch(ctx, args[1:], configCtx)
 	case "help", "--help", "-h":
 		printUsage(a.stdout)
 		return exitOK
@@ -77,6 +107,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "plane-cli is a Plane.so CLI.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  plane-cli [--env-file <path>] <command>")
 	fmt.Fprintln(w, "  plane-cli --version")
 	fmt.Fprintln(w, "  plane-cli version [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli config get [--format text|json]")

@@ -14,7 +14,7 @@ type searchData struct {
 	Count         int               `json:"count"`
 }
 
-func (a app) cmdSearch(ctx context.Context, args []string, loadedDotenv map[string]bool) int {
+func (a app) cmdSearch(ctx context.Context, args []string, configCtx configContext) int {
 	format, rest, err := parseFormat(args)
 	if err != nil {
 		return a.writeCLIError(err, "json")
@@ -33,7 +33,7 @@ func (a app) cmdSearch(ctx context.Context, args []string, loadedDotenv map[stri
 		}
 		limit = parsed
 	}
-	eff, client, ok := a.configuredPlaneClient(format, loadedDotenv)
+	eff, client, ok := a.configuredPlaneClient(format, configCtx)
 	if !ok {
 		return exitError
 	}

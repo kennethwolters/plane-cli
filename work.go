@@ -42,7 +42,7 @@ type mutationFlags struct {
 	Verify bool
 }
 
-func (a app) cmdWork(ctx context.Context, args []string, loadedDotenv map[string]bool) int {
+func (a app) cmdWork(ctx context.Context, args []string, configCtx configContext) int {
 	if len(args) == 0 {
 		return a.usageError("work requires a subcommand", "text")
 	}
@@ -53,26 +53,26 @@ func (a app) cmdWork(ctx context.Context, args []string, loadedDotenv map[string
 	}
 	switch sub {
 	case "list":
-		return a.cmdWorkList(ctx, format, loadedDotenv, rest)
+		return a.cmdWorkList(ctx, format, configCtx, rest)
 	case "get":
 		if len(rest) != 1 {
 			return a.usageError("work get requires exactly one work item reference", format)
 		}
-		return a.cmdWorkGet(ctx, format, loadedDotenv, rest[0])
+		return a.cmdWorkGet(ctx, format, configCtx, rest[0])
 	case "create":
-		return a.cmdWorkCreate(ctx, format, loadedDotenv, rest)
+		return a.cmdWorkCreate(ctx, format, configCtx, rest)
 	case "edit":
-		return a.cmdWorkEdit(ctx, format, loadedDotenv, rest)
+		return a.cmdWorkEdit(ctx, format, configCtx, rest)
 	case "comment":
-		return a.cmdWorkComment(ctx, format, loadedDotenv, rest)
+		return a.cmdWorkComment(ctx, format, configCtx, rest)
 	case "start", "complete", "reopen", "cancel":
-		return a.cmdWorkLifecycle(ctx, format, loadedDotenv, sub, rest)
+		return a.cmdWorkLifecycle(ctx, format, configCtx, sub, rest)
 	default:
 		return a.usageError("unknown work subcommand: "+sub, format)
 	}
 }
 
-func (a app) cmdWorkList(ctx context.Context, format string, loadedDotenv map[string]bool, args []string) int {
+func (a app) cmdWorkList(ctx context.Context, format string, configCtx configContext, args []string) int {
 	projectRef, args, flagErr := parseRequiredStringFlag(args, "--project", "work list requires --project <project>")
 	if flagErr != nil {
 		return a.writeCLIError(flagErr, format)
@@ -90,7 +90,7 @@ func (a app) cmdWorkList(ctx context.Context, format string, loadedDotenv map[st
 		}
 		limit = parsed
 	}
-	eff, client, ok := a.configuredPlaneClient(format, loadedDotenv)
+	eff, client, ok := a.configuredPlaneClient(format, configCtx)
 	if !ok {
 		return exitError
 	}
@@ -113,8 +113,8 @@ func (a app) cmdWorkList(ctx context.Context, format string, loadedDotenv map[st
 	return exitOK
 }
 
-func (a app) cmdWorkGet(ctx context.Context, format string, loadedDotenv map[string]bool, ref string) int {
-	eff, client, ok := a.configuredPlaneClient(format, loadedDotenv)
+func (a app) cmdWorkGet(ctx context.Context, format string, configCtx configContext, ref string) int {
+	eff, client, ok := a.configuredPlaneClient(format, configCtx)
 	if !ok {
 		return exitError
 	}
@@ -131,7 +131,7 @@ func (a app) cmdWorkGet(ctx context.Context, format string, loadedDotenv map[str
 	return exitOK
 }
 
-func (a app) cmdWorkCreate(ctx context.Context, format string, loadedDotenv map[string]bool, args []string) int {
+func (a app) cmdWorkCreate(ctx context.Context, format string, configCtx configContext, args []string) int {
 	flags, args := parseMutationFlags(args)
 	projectRef, args, flagErr := parseRequiredStringFlag(args, "--project", "work create requires --project <project>")
 	if flagErr != nil {
@@ -146,7 +146,7 @@ func (a app) cmdWorkCreate(ctx context.Context, format string, loadedDotenv map[
 	if len(args) != 0 {
 		return a.usageError("work create takes flags only", format)
 	}
-	eff, client, configured := a.configuredPlaneClient(format, loadedDotenv)
+	eff, client, configured := a.configuredPlaneClient(format, configCtx)
 	if !configured {
 		return exitError
 	}
@@ -183,7 +183,7 @@ func (a app) cmdWorkCreate(ctx context.Context, format string, loadedDotenv map[
 	return a.writeWorkMutation(format, "plane.work.create.v1", eff.WorkspaceSlug.Value, data)
 }
 
-func (a app) cmdWorkEdit(ctx context.Context, format string, loadedDotenv map[string]bool, args []string) int {
+func (a app) cmdWorkEdit(ctx context.Context, format string, configCtx configContext, args []string) int {
 	flags, args := parseMutationFlags(args)
 	if len(args) == 0 {
 		return a.usageError("work edit requires a work item reference", format)
@@ -209,7 +209,7 @@ func (a app) cmdWorkEdit(ctx context.Context, format string, loadedDotenv map[st
 	if len(changes) == 0 {
 		return a.writeCLIError(newError("VALIDATION_FAILED", "work edit requires at least one changed field.", "Pass --title, --description-html, or --priority.", false), format)
 	}
-	eff, client, ok := a.configuredPlaneClient(format, loadedDotenv)
+	eff, client, ok := a.configuredPlaneClient(format, configCtx)
 	if !ok {
 		return exitError
 	}
@@ -236,7 +236,7 @@ func (a app) cmdWorkEdit(ctx context.Context, format string, loadedDotenv map[st
 	return a.writeWorkMutation(format, "plane.work.edit.v1", eff.WorkspaceSlug.Value, data)
 }
 
-func (a app) cmdWorkComment(ctx context.Context, format string, loadedDotenv map[string]bool, args []string) int {
+func (a app) cmdWorkComment(ctx context.Context, format string, configCtx configContext, args []string) int {
 	flags, args := parseMutationFlags(args)
 	if len(args) == 0 {
 		return a.usageError("work comment requires a work item reference", format)
@@ -250,7 +250,7 @@ func (a app) cmdWorkComment(ctx context.Context, format string, loadedDotenv map
 	if len(args) != 0 {
 		return a.usageError("work comment takes one reference plus flags", format)
 	}
-	eff, client, configured := a.configuredPlaneClient(format, loadedDotenv)
+	eff, client, configured := a.configuredPlaneClient(format, configCtx)
 	if !configured {
 		return exitError
 	}
@@ -274,7 +274,7 @@ func (a app) cmdWorkComment(ctx context.Context, format string, loadedDotenv map
 	return a.writeWorkMutation(format, "plane.work.comment.v1", eff.WorkspaceSlug.Value, data)
 }
 
-func (a app) cmdWorkLifecycle(ctx context.Context, format string, loadedDotenv map[string]bool, action string, args []string) int {
+func (a app) cmdWorkLifecycle(ctx context.Context, format string, configCtx configContext, action string, args []string) int {
 	flags, args := parseMutationFlags(args)
 	if len(args) == 0 {
 		return a.usageError("work "+action+" requires a work item reference", format)
@@ -293,7 +293,7 @@ func (a app) cmdWorkLifecycle(ctx context.Context, format string, loadedDotenv m
 	if len(args) != 0 {
 		return a.usageError("work "+action+" takes one reference plus flags", format)
 	}
-	eff, client, configured := a.configuredPlaneClient(format, loadedDotenv)
+	eff, client, configured := a.configuredPlaneClient(format, configCtx)
 	if !configured {
 		return exitError
 	}

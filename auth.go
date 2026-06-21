@@ -12,7 +12,7 @@ type authStatusData struct {
 	User          meResponse `json:"user"`
 }
 
-func (a app) cmdAuth(ctx context.Context, args []string, loadedDotenv map[string]bool) int {
+func (a app) cmdAuth(ctx context.Context, args []string, configCtx configContext) int {
 	if len(args) == 0 {
 		return a.usageError("auth requires a subcommand", "text")
 	}
@@ -26,11 +26,14 @@ func (a app) cmdAuth(ctx context.Context, args []string, loadedDotenv map[string
 	if len(rest) != 0 {
 		return a.usageError("auth status takes no positional arguments", format)
 	}
-	return a.cmdAuthStatus(ctx, format, loadedDotenv)
+	return a.cmdAuthStatus(ctx, format, configCtx)
 }
 
-func (a app) cmdAuthStatus(ctx context.Context, format string, loadedDotenv map[string]bool) int {
-	eff, cfgErr := loadEffectiveConfig(loadedDotenv)
+func (a app) cmdAuthStatus(ctx context.Context, format string, configCtx configContext) int {
+	if envErr := configCtx.blockingEnvFileError(); envErr != nil {
+		return a.writeCLIError(envErr, format)
+	}
+	eff, cfgErr := loadEffectiveConfig(configCtx)
 	if cfgErr != nil {
 		return a.writeCLIError(cfgErr, format)
 	}

@@ -9,11 +9,11 @@ The goal is a trusted Plane.so workflow tool with a fat agent skill and a thin C
 Download a release asset from GitHub Releases for your OS/architecture, verify it with `checksums.txt`, and put `plane-cli` on your `PATH`.
 
 ```sh
-curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.1.0/plane-cli_0.1.0_linux_amd64.tar.gz
-curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.1.0/checksums.txt
+curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.2.0/plane-cli_0.2.0_linux_amd64.tar.gz
+curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.2.0/checksums.txt
 sha256sum --check --ignore-missing checksums.txt
-tar -xzf plane-cli_0.1.0_linux_amd64.tar.gz
-sudo install -m 0755 plane-cli_0.1.0_linux_amd64/plane-cli /usr/local/bin/plane-cli
+tar -xzf plane-cli_0.2.0_linux_amd64.tar.gz
+sudo install -m 0755 plane-cli_0.2.0_linux_amd64/plane-cli /usr/local/bin/plane-cli
 ```
 
 Supported release targets:
@@ -30,6 +30,8 @@ Windows is out of scope for V1.
 Configuration is PAT-first via `PLANE_API_KEY`, `PLANE_WORKSPACE_SLUG`, and `PLANE_BASE_URL`. The CLI never stores API keys.
 
 `PLANE_BASE_URL` must be explicit and include a URL scheme, for example `https://app.plane.so` or your self-hosted Plane URL.
+
+Config precedence is: process environment, explicit env file (`--env-file <path>` or `PLANE_CLI_ENV_FILE`), cwd/nearest ancestor `.env`, then CLI config file.
 
 ## Development
 
@@ -62,9 +64,9 @@ plane-cli search "login" --project ENG --format json
 
 Mutations dry-run by default. Use `--apply` to change Plane and `--verify` when the command should confirm the resulting state.
 
-## Agent skill
+## Agent skills
 
-A generic Plane agent skill is included at `.agents/skills/plane/SKILL.md`. It teaches agents to use `plane-cli` with JSON output, typed errors, dry-run/apply/verify, and software-delivery handoffs.
+Project-local skills are limited to repo-specific additions. Shared skills such as `plane`, `github`, `librarian`, `summarize`, and `web-browser` should come from the parent/global skill directory to avoid name conflicts.
 
 ## Release process
 

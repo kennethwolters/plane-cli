@@ -16,7 +16,7 @@ type projectGetData struct {
 	Project       projectSummary `json:"project"`
 }
 
-func (a app) cmdProject(ctx context.Context, args []string, loadedDotenv map[string]bool) int {
+func (a app) cmdProject(ctx context.Context, args []string, configCtx configContext) int {
 	if len(args) == 0 {
 		return a.usageError("project requires a subcommand", "text")
 	}
@@ -30,19 +30,19 @@ func (a app) cmdProject(ctx context.Context, args []string, loadedDotenv map[str
 		if len(rest) != 0 {
 			return a.usageError("project list takes no positional arguments", format)
 		}
-		return a.cmdProjectList(ctx, format, loadedDotenv)
+		return a.cmdProjectList(ctx, format, configCtx)
 	case "get":
 		if len(rest) != 1 {
 			return a.usageError("project get requires exactly one project reference", format)
 		}
-		return a.cmdProjectGet(ctx, format, loadedDotenv, rest[0])
+		return a.cmdProjectGet(ctx, format, configCtx, rest[0])
 	default:
 		return a.usageError("unknown project subcommand: "+sub, format)
 	}
 }
 
-func (a app) cmdProjectList(ctx context.Context, format string, loadedDotenv map[string]bool) int {
-	eff, client, ok := a.configuredPlaneClient(format, loadedDotenv)
+func (a app) cmdProjectList(ctx context.Context, format string, configCtx configContext) int {
+	eff, client, ok := a.configuredPlaneClient(format, configCtx)
 	if !ok {
 		return exitError
 	}
@@ -61,8 +61,8 @@ func (a app) cmdProjectList(ctx context.Context, format string, loadedDotenv map
 	return exitOK
 }
 
-func (a app) cmdProjectGet(ctx context.Context, format string, loadedDotenv map[string]bool, ref string) int {
-	eff, client, ok := a.configuredPlaneClient(format, loadedDotenv)
+func (a app) cmdProjectGet(ctx context.Context, format string, configCtx configContext, ref string) int {
+	eff, client, ok := a.configuredPlaneClient(format, configCtx)
 	if !ok {
 		return exitError
 	}
@@ -79,8 +79,12 @@ func (a app) cmdProjectGet(ctx context.Context, format string, loadedDotenv map[
 	return exitOK
 }
 
-func (a app) configuredPlaneClient(format string, loadedDotenv map[string]bool) (effectiveConfig, planeClient, bool) {
-	eff, cfgErr := loadEffectiveConfig(loadedDotenv)
+func (a app) configuredPlaneClient(format string, configCtx configContext) (effectiveConfig, planeClient, bool) {
+	if envErr := configCtx.blockingEnvFileError(); envErr != nil {
+		a.writeCLIError(envErr, format)
+		return effectiveConfig{}, planeClient{}, false
+	}
+	eff, cfgErr := loadEffectiveConfig(configCtx)
 	if cfgErr != nil {
 		a.writeCLIError(cfgErr, format)
 		return effectiveConfig{}, planeClient{}, false
