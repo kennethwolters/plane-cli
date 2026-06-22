@@ -121,10 +121,13 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  plane-cli member list --project <project> [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli work list --project <project> [--state-group <group>] [--limit <n>] [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli work get <PROJECT-123> [--format text|json]")
-	fmt.Fprintln(w, "  plane-cli work create --project <project> --title <title> [--dry-run|--apply] [--verify] [--format text|json]")
-	fmt.Fprintln(w, "  plane-cli work edit <PROJECT-123> [--title <title>] [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work create --project <project> --title <title> [--description-html <html>] [--priority <priority>] [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work edit <PROJECT-123> [--title <title>] [--description-html <html>] [--priority <priority>] [--dry-run|--apply] [--verify] [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli work comment <PROJECT-123> --html <html> [--dry-run|--apply] [--verify] [--format text|json]")
-	fmt.Fprintln(w, "  plane-cli work start|complete|reopen|cancel <PROJECT-123> [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work start <PROJECT-123> [--reason <text>] [--evidence <text>] [--pr <url-or-number>] [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work complete <PROJECT-123> --evidence <text> [--reason <text>] [--pr <url-or-number>] [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work reopen <PROJECT-123> --reason <text> [--evidence <text>] [--pr <url-or-number>] [--dry-run|--apply] [--verify] [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli work cancel <PROJECT-123> --reason <text> [--evidence <text>] [--pr <url-or-number>] [--dry-run|--apply] [--verify] [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli search <query> [--project <project>] [--max-results <n>] [--format text|json]")
 }
 
