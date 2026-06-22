@@ -114,6 +114,31 @@ func TestCoreWorkCompleteUsesStateGroupAndEvidence(t *testing.T) {
 	}
 }
 
+func TestCoreWorkCancelPreservesReadableIDWhenPatchResponseIsSparse(t *testing.T) {
+	const apiKey = "work-cancel-sparse-secret"
+	server := fakeSparseLifecycleMutationPlane(t, apiKey)
+	defer server.Close()
+
+	res := runCLI(t, discoveryEnv(server.URL, apiKey), "work", "cancel", "BACKEND-42", "--reason", "not needed", "--apply", "--verify", "--format", "json")
+	res.assertExit(t, 0)
+	env := parseEnvelope(t, res.stdout)
+	if env["schema"] != "plane.work.cancel.v1" {
+		t.Fatalf("unexpected schema: %#v", env)
+	}
+	data := env["data"].(map[string]any)
+	if data["applied"] != true || data["verified"] != true {
+		t.Fatalf("cancel was not applied and verified: %#v", data)
+	}
+	operation := data["operation"].(map[string]any)
+	if operation["target"] != "BACKEND-42" {
+		t.Fatalf("operation target lost readable ID: %#v", operation)
+	}
+	item := data["work_item"].(map[string]any)
+	if item["readable_id"] != "BACKEND-42" {
+		t.Fatalf("work item lost readable ID: %#v", item)
+	}
+}
+
 func TestCoreWorkLifecycleDryRunPlansStateGroups(t *testing.T) {
 	cases := []struct {
 		action string
@@ -221,6 +246,46 @@ func fakeWorkPlaneWithCreateHook(t *testing.T, apiKey string, onCreate func()) *
 			}
 			completed = true
 			fmt.Fprint(w, `{"id":"work-42","project":"project-backend","sequence_id":42,"name":"Fix OAuth","state":"state-done","state_group":"completed"}`)
+		default:
+			t.Fatalf("unexpected request: %s", key)
+		}
+	}))
+}
+
+func fakeSparseLifecycleMutationPlane(t *testing.T, apiKey string) *httptest.Server {
+	t.Helper()
+	cancelled := false
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-API-Key"); got != apiKey {
+			t.Fatalf("unexpected X-API-Key: %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		key := r.Method + " " + r.URL.Path
+		switch key {
+		case "GET /api/v1/workspaces/development/work-items/BACKEND-42/":
+			if cancelled {
+				fmt.Fprint(w, `{"id":"work-42","project":"project-backend","sequence_id":42,"name":"Fix OAuth","description_html":"<p>OAuth bug</p>","state":"state-cancelled","state_group":"cancelled"}`)
+			} else {
+				fmt.Fprint(w, `{"id":"work-42","project":"project-backend","sequence_id":42,"name":"Fix OAuth","description_html":"<p>OAuth bug</p>","state":"state-started","state_group":"started"}`)
+			}
+		case "GET /api/v1/workspaces/development/projects/project-backend/states/":
+			fmt.Fprint(w, `{"results":[{"id":"state-started","name":"In Progress","group":"started","default":true},{"id":"state-cancelled","name":"Cancelled","group":"cancelled","default":true}]}`)
+		case "PATCH /api/v1/workspaces/development/projects/project-backend/work-items/work-42/":
+			body := readJSONBody(t, r)
+			if body["state"] != "state-cancelled" {
+				t.Fatalf("unexpected patch body: %#v", body)
+			}
+			cancelled = true
+			fmt.Fprint(w, `{"id":"work-42","project":"project-backend","name":"Fix OAuth","state":"state-cancelled","state_group":"cancelled"}`)
+		case "POST /api/v1/workspaces/development/projects/project-backend/work-items/work-42/comments/":
+			body := readJSONBody(t, r)
+			if !strings.Contains(fmt.Sprint(body["comment_html"]), "not needed") {
+				t.Fatalf("unexpected comment body: %#v", body)
+			}
+			w.WriteHeader(http.StatusCreated)
+			fmt.Fprint(w, `{"id":"comment-1","comment_html":"<p>ok</p>"}`)
+		case "GET /api/v1/workspaces/development/projects/project-backend/work-items/work-42/":
+			fmt.Fprint(w, `{"id":"work-42","project":"project-backend","sequence_id":42,"name":"Fix OAuth","state":"state-cancelled","state_group":"cancelled"}`)
 		default:
 			t.Fatalf("unexpected request: %s", key)
 		}

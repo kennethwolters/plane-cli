@@ -223,6 +223,7 @@ func (a app) cmdWorkEdit(ctx context.Context, format string, configCtx configCon
 		if err != nil {
 			return a.writeCLIError(err, format)
 		}
+		updated = preserveWorkItemIdentity(updated, item)
 		data.Applied = true
 		data.WorkItem = &updated
 		if flags.Verify {
@@ -322,6 +323,7 @@ func (a app) cmdWorkLifecycle(ctx context.Context, format string, configCtx conf
 		if err != nil {
 			return a.writeCLIError(err, format)
 		}
+		updated = preserveWorkItemIdentity(updated, item)
 		if evidence != "" || reason != "" || pr != "" {
 			html := lifecycleCommentHTML(action, evidence, reason, pr)
 			if html != "" {
@@ -346,6 +348,25 @@ func (a app) cmdWorkLifecycle(ctx context.Context, format string, configCtx conf
 		}
 	}
 	return a.writeWorkMutation(format, "plane.work."+action+".v1", eff.WorkspaceSlug.Value, data)
+}
+
+func preserveWorkItemIdentity(updated, original workItemSummary) workItemSummary {
+	if updated.ProjectIdentifier == "" {
+		updated.ProjectIdentifier = original.ProjectIdentifier
+	}
+	if updated.ReadableID == "" {
+		updated.ReadableID = original.ReadableID
+	}
+	if updated.ProjectID == "" {
+		updated.ProjectID = original.ProjectID
+	}
+	if updated.WorkItemID == "" {
+		updated.WorkItemID = original.WorkItemID
+	}
+	if updated.SequenceID == "" {
+		updated.SequenceID = original.SequenceID
+	}
+	return updated
 }
 
 func parseMutationFlags(args []string) (mutationFlags, []string) {
