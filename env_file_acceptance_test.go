@@ -54,6 +54,49 @@ func TestAncestorDotenvDiscovery(t *testing.T) {
 	res.assertNoSecret(t, apiKey)
 }
 
+func TestEnvFileFlagPrecedenceBeatsCwdDotenv(t *testing.T) {
+	workDir := t.TempDir()
+	explicitPath := filepath.Join(workDir, "explicit.env")
+	cwdPath := filepath.Join(workDir, ".env")
+	writeTestEnvFile(t, explicitPath, discoveryEnv("https://explicit.example.test", "explicit-env-file-secret"))
+	writeTestEnvFile(t, cwdPath, discoveryEnv("https://cwd.example.test", "cwd-env-file-secret"))
+
+	res := runCLIInDir(t, workDir, nil, "--env-file", explicitPath, "config", "get", "--format", "json")
+	res.assertExit(t, 0)
+	res.assertNoSecret(t, "explicit-env-file-secret")
+	res.assertNoSecret(t, "cwd-env-file-secret")
+	assertConfigGetEnvFileSource(t, res.stdout, explicitPath, "https://explicit.example.test", "development")
+}
+
+func TestEnvFileEnvVarPrecedenceBeatsCwdDotenv(t *testing.T) {
+	workDir := t.TempDir()
+	envPath := filepath.Join(workDir, "from-env.env")
+	cwdPath := filepath.Join(workDir, ".env")
+	writeTestEnvFile(t, envPath, discoveryEnv("https://env-var.example.test", "env-var-env-file-secret"))
+	writeTestEnvFile(t, cwdPath, discoveryEnv("https://cwd.example.test", "cwd-env-file-secret"))
+
+	res := runCLIInDir(t, workDir, map[string]string{"PLANE_CLI_ENV_FILE": envPath}, "config", "get", "--format", "json")
+	res.assertExit(t, 0)
+	res.assertNoSecret(t, "env-var-env-file-secret")
+	res.assertNoSecret(t, "cwd-env-file-secret")
+	assertConfigGetEnvFileSource(t, res.stdout, envPath, "https://env-var.example.test", "development")
+}
+
+func TestCwdDotenvPrecedenceBeatsAncestorDotenv(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "packages", "cli")
+	cwdPath := filepath.Join(nested, ".env")
+	ancestorPath := filepath.Join(root, ".env")
+	writeTestEnvFile(t, ancestorPath, discoveryEnv("https://ancestor.example.test", "ancestor-env-file-secret"))
+	writeTestEnvFile(t, cwdPath, discoveryEnv("https://cwd.example.test", "cwd-env-file-secret"))
+
+	res := runCLIInDir(t, nested, nil, "config", "get", "--format", "json")
+	res.assertExit(t, 0)
+	res.assertNoSecret(t, "cwd-env-file-secret")
+	res.assertNoSecret(t, "ancestor-env-file-secret")
+	assertConfigGetEnvFileSource(t, res.stdout, cwdPath, "https://cwd.example.test", "development")
+}
+
 func TestProcessEnvOverridesEnvFile(t *testing.T) {
 	const goodKey = "process-env-secret"
 	server := fakeAuthPlane(t, goodKey)
@@ -90,11 +133,39 @@ func TestDoctorReportsEnvFileSourcesAndRedacts(t *testing.T) {
 	}
 }
 
-func TestMissingExplicitEnvFileIsTyped(t *testing.T) {
+func TestMissingExplicitEnvFileDiagnosticsAreTyped(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing.env")
-	res := runCLI(t, nil, "--env-file", missing, "auth", "status", "--format", "json")
-	res.assertExit(t, 1)
-	assertErrorCode(t, res.stdout, "ENV_FILE_NOT_FOUND")
+	const secret = "missing-env-file-diagnostic-secret"
+
+	t.Run("config get", func(t *testing.T) {
+		res := runCLI(t, map[string]string{"PLANE_API_KEY": secret}, "--env-file", missing, "config", "get", "--format", "json")
+		res.assertExit(t, 1)
+		res.assertNoSecret(t, secret)
+		assertErrorCode(t, res.stdout, "ENV_FILE_NOT_FOUND")
+	})
+
+	t.Run("auth status", func(t *testing.T) {
+		res := runCLI(t, map[string]string{"PLANE_API_KEY": secret}, "--env-file", missing, "auth", "status", "--format", "json")
+		res.assertExit(t, 1)
+		res.assertNoSecret(t, secret)
+		assertErrorCode(t, res.stdout, "ENV_FILE_NOT_FOUND")
+	})
+
+	t.Run("doctor", func(t *testing.T) {
+		res := runCLI(t, map[string]string{"PLANE_API_KEY": secret}, "--env-file", missing, "doctor", "--for-agent", "--format", "json")
+		res.assertExit(t, 1)
+		res.assertNoSecret(t, secret)
+		env := parseEnvelope(t, res.stdout)
+		checks := env["data"].(map[string]any)["checks"].([]any)
+		envFileCheck := findDoctorCheck(t, checks, "env_file")
+		if envFileCheck["ok"] != false || envFileCheck["code"] != "ENV_FILE_NOT_FOUND" {
+			t.Fatalf("unexpected env_file check: %#v", envFileCheck)
+		}
+		gotPath, _ := envFileCheck["path"].(string)
+		if canonicalTestPath(t, gotPath) != canonicalTestPath(t, missing) {
+			t.Fatalf("env_file check path %q, want %q", gotPath, missing)
+		}
+	})
 }
 
 func fakeAuthPlane(t *testing.T, apiKey string) *httptest.Server {
@@ -134,4 +205,28 @@ func findDoctorCheck(t *testing.T, checks []any, name string) map[string]any {
 	}
 	t.Fatalf("doctor check not found: %s", name)
 	return nil
+}
+
+func assertConfigGetEnvFileSource(t *testing.T, stdout, wantPath, wantBaseURL, wantWorkspace string) {
+	t.Helper()
+	env := parseEnvelope(t, stdout)
+	if env["schema"] != "plane.config.v1" {
+		t.Fatalf("unexpected schema: %#v", env)
+	}
+	data := env["data"].(map[string]any)
+	for name, wantValue := range map[string]string{
+		"base_url":       wantBaseURL,
+		"workspace_slug": wantWorkspace,
+	} {
+		value := data[name].(map[string]any)
+		gotPath, _ := value["path"].(string)
+		if value["source"] != "env_file" || canonicalTestPath(t, gotPath) != canonicalTestPath(t, wantPath) || value["value"] != wantValue || value["present"] != true {
+			t.Fatalf("unexpected %s config value: %#v", name, value)
+		}
+	}
+	apiKey := data["api_key"].(map[string]any)
+	gotPath, _ := apiKey["path"].(string)
+	if apiKey["source"] != "env_file" || canonicalTestPath(t, gotPath) != canonicalTestPath(t, wantPath) || apiKey["value"] != nil || apiKey["present"] != true {
+		t.Fatalf("unexpected api_key config value: %#v", apiKey)
+	}
 }
