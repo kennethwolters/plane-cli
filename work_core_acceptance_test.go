@@ -28,6 +28,49 @@ func TestCoreWorkListJSONContract(t *testing.T) {
 	}
 }
 
+func TestCoreWorkListStateGroupFilterResolvesStateIDs(t *testing.T) {
+	const apiKey = "work-list-state-id-secret"
+	server := fakeWorkPlaneWithStateIDOnlyItems(t, apiKey)
+	defer server.Close()
+
+	res := runCLI(t, discoveryEnv(server.URL, apiKey), "work", "list", "--project", "BACKEND", "--state-group", "backlog", "--limit", "3", "--format", "json")
+	res.assertExit(t, 0)
+	env := parseEnvelope(t, res.stdout)
+	items := env["data"].(map[string]any)["work_items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("work item count = %d, want 1: %#v", len(items), items)
+	}
+	item := items[0].(map[string]any)
+	if item["readable_id"] != "BACKEND-44" {
+		t.Fatalf("unexpected backlog item: %#v", item)
+	}
+	if item["state_group"] != "backlog" {
+		t.Fatalf("state_group = %#v, want backlog in item: %#v", item["state_group"], item)
+	}
+}
+
+func TestCoreWorkListEnrichesMissingStateGroupWithoutFilter(t *testing.T) {
+	const apiKey = "work-list-state-id-enrich-secret"
+	server := fakeWorkPlaneWithStateIDOnlyItems(t, apiKey)
+	defer server.Close()
+
+	res := runCLI(t, discoveryEnv(server.URL, apiKey), "work", "list", "--project", "BACKEND", "--format", "json")
+	res.assertExit(t, 0)
+	env := parseEnvelope(t, res.stdout)
+	items := env["data"].(map[string]any)["work_items"].([]any)
+	if len(items) != 4 {
+		t.Fatalf("work item count = %d, want 4: %#v", len(items), items)
+	}
+	groupsByReadableID := map[string]any{}
+	for _, raw := range items {
+		item := raw.(map[string]any)
+		groupsByReadableID[item["readable_id"].(string)] = item["state_group"]
+	}
+	if groupsByReadableID["BACKEND-41"] != "started" || groupsByReadableID["BACKEND-42"] != "completed" || groupsByReadableID["BACKEND-44"] != "backlog" {
+		t.Fatalf("work items were not enriched with state groups: %#v", items)
+	}
+}
+
 func TestCoreWorkGetJSONContract(t *testing.T) {
 	const apiKey = "work-get-secret"
 	server := fakeWorkPlane(t, apiKey)
@@ -167,6 +210,27 @@ func TestCoreSearchFindsWorkItems(t *testing.T) {
 func fakeWorkPlane(t *testing.T, apiKey string) *httptest.Server {
 	t.Helper()
 	return fakeWorkPlaneWithCreateHook(t, apiKey, func() {})
+}
+
+func fakeWorkPlaneWithStateIDOnlyItems(t *testing.T, apiKey string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-API-Key"); got != apiKey {
+			t.Fatalf("unexpected X-API-Key: %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		key := r.Method + " " + r.URL.Path
+		switch key {
+		case "GET /api/v1/workspaces/development/projects/":
+			fmt.Fprint(w, `{"results":[{"id":"project-backend","identifier":"BACKEND","name":"Backend"}]}`)
+		case "GET /api/v1/workspaces/development/projects/project-backend/work-items/":
+			fmt.Fprint(w, `{"results":[{"id":"work-41","project":"project-backend","sequence_id":41,"name":"Started setup","state":"state-started"},{"id":"work-42","project":"project-backend","sequence_id":42,"name":"Done setup","state":"state-completed"},{"id":"work-43","project":"project-backend","sequence_id":43,"name":"More progress","state":"state-started"},{"id":"work-44","project":"project-backend","sequence_id":44,"name":"Plan migration","state":"state-backlog"}]}`)
+		case "GET /api/v1/workspaces/development/projects/project-backend/states/":
+			fmt.Fprint(w, `{"results":[{"id":"state-started","name":"In Progress","group":"started","default":true},{"id":"state-completed","name":"Done","group":"completed","default":true},{"id":"state-backlog","name":"Backlog","group":"backlog","default":true}]}`)
+		default:
+			t.Fatalf("unexpected request: %s", key)
+		}
+	}))
 }
 
 func fakeWorkPlaneWithCreateHook(t *testing.T, apiKey string, onCreate func()) *httptest.Server {
