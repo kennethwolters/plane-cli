@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -17,6 +18,13 @@ type workListData struct {
 type workGetData struct {
 	WorkspaceSlug string          `json:"workspace_slug"`
 	WorkItem      workItemSummary `json:"work_item"`
+}
+
+type workCommentsData struct {
+	WorkspaceSlug string           `json:"workspace_slug"`
+	WorkItem      workItemSummary  `json:"work_item"`
+	Comments      []commentSummary `json:"comments"`
+	Count         int              `json:"count"`
 }
 
 type workMutationData struct {
@@ -65,6 +73,8 @@ func (a app) cmdWork(ctx context.Context, args []string, configCtx configContext
 		return a.cmdWorkEdit(ctx, format, configCtx, rest)
 	case "comment":
 		return a.cmdWorkComment(ctx, format, configCtx, rest)
+	case "comments":
+		return a.cmdWorkComments(ctx, format, configCtx, rest)
 	case "start", "complete", "reopen", "cancel":
 		return a.cmdWorkLifecycle(ctx, format, configCtx, sub, rest)
 	default:
@@ -131,6 +141,47 @@ func (a app) cmdWorkGet(ctx context.Context, format string, configCtx configCont
 	return exitOK
 }
 
+func (a app) cmdWorkComments(ctx context.Context, format string, configCtx configContext, args []string) int {
+	if len(args) == 0 {
+		return a.usageError("work comments requires a work item reference", format)
+	}
+	ref := args[0]
+	args = args[1:]
+	limitText, args, _ := parseStringFlag(args, "--limit")
+	if len(args) != 0 {
+		return a.usageError("work comments takes one reference plus flags", format)
+	}
+	limit := 50
+	if limitText != "" {
+		parsed, err := strconv.Atoi(limitText)
+		if err != nil || parsed < 1 {
+			return a.writeCLIError(newError("VALIDATION_FAILED", "--limit must be a positive integer.", "Use a positive integer such as --limit 20.", false), format)
+		}
+		limit = parsed
+	}
+	eff, client, ok := a.configuredPlaneClient(format, configCtx)
+	if !ok {
+		return exitError
+	}
+	item, err := client.getWorkItemByRef(ctx, ref)
+	if err != nil {
+		return a.writeCLIError(err, format)
+	}
+	comments, err := client.listWorkItemComments(ctx, item.ProjectID, item.WorkItemID, limit)
+	if err != nil {
+		return a.writeCLIError(err, format)
+	}
+	data := workCommentsData{WorkspaceSlug: eff.WorkspaceSlug.Value, WorkItem: item, Comments: comments, Count: len(comments)}
+	if format == "json" {
+		writeJSON(a.stdout, okEnvelope("plane.work.comments.v1", data))
+		return exitOK
+	}
+	for _, comment := range comments {
+		fmt.Fprintf(a.stdout, "%s\t%s\n", comment.ID, comment.CommentHTML)
+	}
+	return exitOK
+}
+
 func (a app) cmdWorkCreate(ctx context.Context, format string, configCtx configContext, args []string) int {
 	flags, args := parseMutationFlags(args)
 	projectRef, args, flagErr := parseRequiredStringFlag(args, "--project", "work create requires --project <project>")
@@ -141,11 +192,17 @@ func (a app) cmdWorkCreate(ctx context.Context, format string, configCtx configC
 	if !ok || title == "" {
 		return a.writeCLIError(newError("VALIDATION_FAILED", "work create requires --title <title>.", "Pass a concise work item title.", false), format)
 	}
-	descriptionHTML, args, _ := parseStringFlag(args, "--description-html")
+	descriptionHTML, args, descriptionInline := parseStringFlag(args, "--description-html")
+	descriptionFile, args, descriptionFileFlag := parseStringFlag(args, "--description-file")
 	priority, args, _ := parseStringFlag(args, "--priority")
 	if len(args) != 0 {
 		return a.usageError("work create takes flags only", format)
 	}
+	body, bodyErr := readBodyInput(descriptionHTML, descriptionInline, "--description-html", descriptionFile, descriptionFileFlag, "--description-file")
+	if bodyErr != nil {
+		return a.writeCLIError(bodyErr, format)
+	}
+	descriptionHTML = body
 	eff, client, configured := a.configuredPlaneClient(format, configCtx)
 	if !configured {
 		return exitError
@@ -191,11 +248,17 @@ func (a app) cmdWorkEdit(ctx context.Context, format string, configCtx configCon
 	ref := args[0]
 	args = args[1:]
 	title, args, _ := parseStringFlag(args, "--title")
-	descriptionHTML, args, _ := parseStringFlag(args, "--description-html")
+	descriptionHTML, args, descriptionInline := parseStringFlag(args, "--description-html")
+	descriptionFile, args, descriptionFileFlag := parseStringFlag(args, "--description-file")
 	priority, args, _ := parseStringFlag(args, "--priority")
 	if len(args) != 0 {
 		return a.usageError("work edit takes one reference plus flags", format)
 	}
+	body, bodyErr := readBodyInput(descriptionHTML, descriptionInline, "--description-html", descriptionFile, descriptionFileFlag, "--description-file")
+	if bodyErr != nil {
+		return a.writeCLIError(bodyErr, format)
+	}
+	descriptionHTML = body
 	changes := map[string]any{}
 	if title != "" {
 		changes["name"] = title
@@ -243,12 +306,18 @@ func (a app) cmdWorkComment(ctx context.Context, format string, configCtx config
 	}
 	ref := args[0]
 	args = args[1:]
-	html, args, ok := parseStringFlag(args, "--html")
-	if !ok || html == "" {
-		return a.writeCLIError(newError("VALIDATION_FAILED", "work comment requires --html <html>.", "Plane comments are HTML; pass safe HTML markup.", false), format)
-	}
+	html, args, inline := parseStringFlag(args, "--html")
+	htmlFile, args, fileFlag := parseStringFlag(args, "--html-file")
 	if len(args) != 0 {
 		return a.usageError("work comment takes one reference plus flags", format)
+	}
+	body, bodyErr := readBodyInput(html, inline, "--html", htmlFile, fileFlag, "--html-file")
+	if bodyErr != nil {
+		return a.writeCLIError(bodyErr, format)
+	}
+	html = body
+	if html == "" {
+		return a.writeCLIError(newError("VALIDATION_FAILED", "work comment requires --html <html> or --html-file <path>.", "Plane comments are HTML; pass safe HTML markup.", false), format)
 	}
 	eff, client, configured := a.configuredPlaneClient(format, configCtx)
 	if !configured {
@@ -356,6 +425,26 @@ func parseMutationFlags(args []string) (mutationFlags, []string) {
 		dryRun = true
 	}
 	return mutationFlags{DryRun: dryRun, Apply: apply, Verify: verify}, args
+}
+
+func readBodyInput(inline string, inlineSet bool, inlineFlag string, filePath string, fileSet bool, fileFlag string) (string, *cliError) {
+	if inlineSet && fileSet {
+		return "", newError("VALIDATION_FAILED", inlineFlag+" and "+fileFlag+" cannot be used together.", "Pass either inline HTML or a file path, not both.", false)
+	}
+	if !fileSet {
+		return inline, nil
+	}
+	if filePath == "" {
+		return "", newError("VALIDATION_FAILED", fileFlag+" requires a path.", "Pass "+fileFlag+" <path>.", false)
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", newError("FILE_NOT_FOUND", "Input file not found: "+filePath, "Check the path and retry.", false)
+		}
+		return "", newError("FILE_READ_FAILED", "Could not read input file: "+filePath, "Check file permissions and retry.", false)
+	}
+	return string(data), nil
 }
 
 func lifecycleTargetGroup(action string) string {

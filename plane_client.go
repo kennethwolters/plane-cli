@@ -253,6 +253,26 @@ func (c planeClient) createWorkItemComment(ctx context.Context, projectID, workI
 	return commentSummary{ID: stringFromMap(raw, "id"), CommentHTML: stringFromMap(raw, "comment_html")}, nil
 }
 
+func (c planeClient) listWorkItemComments(ctx context.Context, projectID, workItemID string, limit int) ([]commentSummary, *cliError) {
+	endpoint := "/api/v1/workspaces/" + url.PathEscape(c.workspaceSlug) + "/projects/" + url.PathEscape(projectID) + "/work-items/" + url.PathEscape(workItemID) + "/comments/"
+	var raw any
+	if err := c.getJSON(ctx, endpoint, &raw); err != nil {
+		if err.Code == "RESOURCE_NOT_FOUND" {
+			return nil, newError("WORK_ITEM_NOT_FOUND", "Work item not found: "+workItemID, "Resolve the work item again and retry.", true)
+		}
+		return nil, err
+	}
+	items := extractResultMaps(raw)
+	comments := make([]commentSummary, 0, len(items))
+	for _, item := range items {
+		comments = append(comments, mapComment(item))
+		if limit > 0 && len(comments) >= limit {
+			break
+		}
+	}
+	return comments, nil
+}
+
 func (c planeClient) firstStateForGroup(ctx context.Context, projectID, group string) (stateSummary, *cliError) {
 	states, err := c.listProjectStates(ctx, projectID)
 	if err != nil {
@@ -291,6 +311,10 @@ func (c planeClient) verifyWorkItemChanges(ctx context.Context, item workItemSum
 		switch key {
 		case "name":
 			if verified.Name != fmt.Sprint(want) {
+				return false, nil
+			}
+		case "description_html":
+			if verified.DescriptionHTML != fmt.Sprint(want) {
 				return false, nil
 			}
 		case "priority":
@@ -484,6 +508,13 @@ func mapWorkItem(raw map[string]any, project projectSummary) workItemSummary {
 		Priority:          stringFromMap(raw, "priority"),
 		AssigneeIDs:       stringSliceFromMap(raw, "assignees"),
 		LabelIDs:          stringSliceFromMap(raw, "labels"),
+	}
+}
+
+func mapComment(raw map[string]any) commentSummary {
+	return commentSummary{
+		ID:          stringFromMap(raw, "id", "comment_id"),
+		CommentHTML: stringFromMap(raw, "comment_html", "html"),
 	}
 }
 
