@@ -9,11 +9,11 @@ The goal is a trusted Plane.so workflow tool with a fat agent skill and a thin C
 Download a release asset from GitHub Releases for your OS/architecture, verify it with `checksums.txt`, and put `plane-cli` on your `PATH`.
 
 ```sh
-curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.2.1/plane-cli_0.2.1_linux_amd64.tar.gz
-curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.2.1/checksums.txt
+curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.3.0/plane-cli_0.3.0_linux_amd64.tar.gz
+curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.3.0/checksums.txt
 sha256sum --check --ignore-missing checksums.txt
-tar -xzf plane-cli_0.2.1_linux_amd64.tar.gz
-sudo install -m 0755 plane-cli_0.2.1_linux_amd64/plane-cli /usr/local/bin/plane-cli
+tar -xzf plane-cli_0.3.0_linux_amd64.tar.gz
+sudo install -m 0755 plane-cli_0.3.0_linux_amd64/plane-cli /usr/local/bin/plane-cli
 ```
 
 Supported release targets:
