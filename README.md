@@ -9,11 +9,11 @@ The goal is a trusted Plane.so workflow tool with a fat agent skill and a thin C
 Download a release asset from GitHub Releases for your OS/architecture, verify it with `checksums.txt`, and put `plane-cli` on your `PATH`.
 
 ```sh
-curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.3.0/plane-cli_0.3.0_linux_amd64.tar.gz
-curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.3.0/checksums.txt
+curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.4.0/plane-cli_0.4.0_linux_amd64.tar.gz
+curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.4.0/checksums.txt
 sha256sum --check --ignore-missing checksums.txt
-tar -xzf plane-cli_0.3.0_linux_amd64.tar.gz
-sudo install -m 0755 plane-cli_0.3.0_linux_amd64/plane-cli /usr/local/bin/plane-cli
+tar -xzf plane-cli_0.4.0_linux_amd64.tar.gz
+sudo install -m 0755 plane-cli_0.4.0_linux_amd64/plane-cli /usr/local/bin/plane-cli
 ```
 
 Supported release targets:
@@ -55,11 +55,18 @@ plane-cli resolve ENG-42 --format json
 ```sh
 plane-cli project list --format json
 plane-cli work list --project ENG --format json
+plane-cli work list --project ENG --fields readable_id,name,state_group,priority,description_excerpt --description-excerpt 240 --format json
 plane-cli work get ENG-42 --format json
 plane-cli work create --project ENG --title "Fix login" --format json
-plane-cli work create --project ENG --title "Fix login" --apply --verify --format json
+plane-cli work create --project ENG --title "Fix login" --description-file ./body.html --dedupe-query "Fix login" --apply --verify --format json
+plane-cli work edit ENG-42 --append-description-html "<hr><p>Updated scope.</p>" --apply --verify --format json
+plane-cli work edit ENG-42 --labels-add tracking --assignees-add alice@example.test --apply --verify --format json
+plane-cli work move ENG-42 --state "Ready" --apply --verify --format json
+plane-cli work comments ENG-42 --limit 5 --format json
+plane-cli work batch comment --file ./comments.json --apply --verify --format json
+plane-cli work relation add ENG-42 --blocks ENG-43 --apply --verify --format json
 plane-cli work complete ENG-42 --evidence "Tests passed and PR merged" --apply --verify --format json
-plane-cli search "login" --project ENG --format json
+plane-cli search "login" --project ENG --include-comments --format json
 ```
 
 Mutations dry-run by default. Use `--apply` to change Plane and `--verify` when the command should confirm the resulting state.

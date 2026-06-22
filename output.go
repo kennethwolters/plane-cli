@@ -14,11 +14,13 @@ type successEnvelope struct {
 }
 
 type cliError struct {
-	Code      string   `json:"code"`
-	Message   string   `json:"message"`
-	Fix       string   `json:"fix"`
-	Retryable bool     `json:"retryable"`
-	Examples  []string `json:"examples"`
+	Code              string   `json:"code"`
+	Message           string   `json:"message"`
+	Fix               string   `json:"fix"`
+	Retryable         bool     `json:"retryable"`
+	RetryAfterSeconds int      `json:"retry_after_seconds,omitempty"`
+	AcceptedValues    []string `json:"accepted_values,omitempty"`
+	Examples          []string `json:"examples"`
 }
 
 type errorResponse struct {
@@ -37,6 +39,17 @@ func errorEnvelope(err *cliError) errorResponse {
 
 func newError(code, message, fix string, retryable bool, examples ...string) *cliError {
 	return &cliError{Code: code, Message: message, Fix: fix, Retryable: retryable, Examples: examples}
+}
+
+func newRateLimitError(retryAfterSeconds int) *cliError {
+	return &cliError{
+		Code:              "RATE_LIMITED",
+		Message:           "Plane API returned HTTP 429.",
+		Fix:               "Retry after the indicated delay or lower mutation concurrency.",
+		Retryable:         true,
+		RetryAfterSeconds: retryAfterSeconds,
+		Examples:          []string{},
+	}
 }
 
 func writeJSON(w io.Writer, v any) {

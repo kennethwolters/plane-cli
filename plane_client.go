@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -61,6 +62,12 @@ type memberSummary struct {
 	LastName    string `json:"last_name,omitempty"`
 }
 
+type labelSummary struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color,omitempty"`
+}
+
 type workItemSummary struct {
 	ProjectIdentifier string   `json:"project_identifier,omitempty"`
 	ReadableID        string   `json:"readable_id,omitempty"`
@@ -70,15 +77,31 @@ type workItemSummary struct {
 	Name              string   `json:"name"`
 	DescriptionHTML   string   `json:"description_html,omitempty"`
 	StateID           string   `json:"state_id,omitempty"`
+	StateName         string   `json:"state_name,omitempty"`
 	StateGroup        string   `json:"state_group,omitempty"`
 	Priority          string   `json:"priority,omitempty"`
 	AssigneeIDs       []string `json:"assignee_ids"`
 	LabelIDs          []string `json:"label_ids"`
+	ParentID          string   `json:"parent_id,omitempty"`
+	CreatedAt         string   `json:"created_at,omitempty"`
+	UpdatedAt         string   `json:"updated_at,omitempty"`
 }
 
 type commentSummary struct {
 	ID          string `json:"id"`
 	CommentHTML string `json:"comment_html,omitempty"`
+	Excerpt     string `json:"excerpt,omitempty"`
+	AuthorID    string `json:"author_id,omitempty"`
+	AuthorName  string `json:"author_name,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+	Permalink   string `json:"permalink,omitempty"`
+}
+
+type relationSummary struct {
+	ID                string `json:"id"`
+	RelationType      string `json:"relation_type"`
+	RelatedWorkItemID string `json:"related_work_item_id"`
 }
 
 func newPlaneClient(eff effectiveConfig, httpClient *http.Client) planeClient {
@@ -180,6 +203,27 @@ func (c planeClient) listProjectMembers(ctx context.Context, projectID string) (
 		})
 	}
 	return members, nil
+}
+
+func (c planeClient) listProjectLabels(ctx context.Context, projectID string) ([]labelSummary, *cliError) {
+	endpoint := "/api/v1/workspaces/" + url.PathEscape(c.workspaceSlug) + "/projects/" + url.PathEscape(projectID) + "/labels/"
+	var raw any
+	if err := c.getJSON(ctx, endpoint, &raw); err != nil {
+		if err.Code == "RESOURCE_NOT_FOUND" {
+			return nil, newError("PROJECT_NOT_FOUND", "Project not found: "+projectID, "Use plane-cli project list --format json to find a valid project.", true)
+		}
+		return nil, err
+	}
+	items := extractResultMaps(raw)
+	labels := make([]labelSummary, 0, len(items))
+	for _, item := range items {
+		labels = append(labels, labelSummary{
+			ID:    stringFromMap(item, "id"),
+			Name:  stringFromMap(item, "name"),
+			Color: stringFromMap(item, "color"),
+		})
+	}
+	return labels, nil
 }
 
 func (c planeClient) listWorkItems(ctx context.Context, project projectSummary, stateGroup string, limit int) ([]workItemSummary, *cliError) {
@@ -312,6 +356,61 @@ func (c planeClient) listWorkItemComments(ctx context.Context, projectID, workIt
 	return comments, nil
 }
 
+func (c planeClient) listWorkItemChildren(ctx context.Context, item workItemSummary, limit int) ([]workItemSummary, *cliError) {
+	endpoint := "/api/v1/workspaces/" + url.PathEscape(c.workspaceSlug) + "/projects/" + url.PathEscape(item.ProjectID) + "/work-items/" + url.PathEscape(item.WorkItemID) + "/children/"
+	var raw any
+	if err := c.getJSON(ctx, endpoint, &raw); err != nil {
+		return nil, err
+	}
+	rawItems := extractResultMaps(raw)
+	children := make([]workItemSummary, 0, len(rawItems))
+	project := projectSummary{ID: item.ProjectID, Identifier: item.ProjectIdentifier}
+	for _, rawItem := range rawItems {
+		children = append(children, mapWorkItem(rawItem, project))
+		if limit > 0 && len(children) >= limit {
+			break
+		}
+	}
+	return children, nil
+}
+
+func (c planeClient) updateWorkItemParent(ctx context.Context, child workItemSummary, parentID string) (workItemSummary, *cliError) {
+	changes := map[string]any{"parent": parentID}
+	if parentID == "" {
+		changes["parent"] = nil
+	}
+	return c.updateWorkItem(ctx, child.ProjectID, child.WorkItemID, changes)
+}
+
+func (c planeClient) createWorkItemRelation(ctx context.Context, item workItemSummary, relationType string, related workItemSummary) (relationSummary, *cliError) {
+	endpoint := "/api/v1/workspaces/" + url.PathEscape(c.workspaceSlug) + "/projects/" + url.PathEscape(item.ProjectID) + "/work-items/" + url.PathEscape(item.WorkItemID) + "/relations/"
+	body := map[string]any{"relation_type": relationType, "related_work_item": related.WorkItemID}
+	var raw map[string]any
+	if err := c.postJSON(ctx, endpoint, body, &raw); err != nil {
+		return relationSummary{}, err
+	}
+	return mapRelation(raw), nil
+}
+
+func (c planeClient) listWorkItemRelations(ctx context.Context, item workItemSummary) ([]relationSummary, *cliError) {
+	endpoint := "/api/v1/workspaces/" + url.PathEscape(c.workspaceSlug) + "/projects/" + url.PathEscape(item.ProjectID) + "/work-items/" + url.PathEscape(item.WorkItemID) + "/relations/"
+	var raw any
+	if err := c.getJSON(ctx, endpoint, &raw); err != nil {
+		return nil, err
+	}
+	items := extractResultMaps(raw)
+	relations := make([]relationSummary, 0, len(items))
+	for _, rawItem := range items {
+		relations = append(relations, mapRelation(rawItem))
+	}
+	return relations, nil
+}
+
+func (c planeClient) deleteWorkItemRelation(ctx context.Context, item workItemSummary, relationID string) *cliError {
+	endpoint := "/api/v1/workspaces/" + url.PathEscape(c.workspaceSlug) + "/projects/" + url.PathEscape(item.ProjectID) + "/work-items/" + url.PathEscape(item.WorkItemID) + "/relations/" + url.PathEscape(relationID) + "/"
+	return c.deleteJSON(ctx, endpoint, nil)
+}
+
 func (c planeClient) firstStateForGroup(ctx context.Context, projectID, group string) (stateSummary, *cliError) {
 	states, err := c.listProjectStates(ctx, projectID)
 	if err != nil {
@@ -358,6 +457,18 @@ func (c planeClient) verifyWorkItemChanges(ctx context.Context, item workItemSum
 			}
 		case "priority":
 			if verified.Priority != fmt.Sprint(want) {
+				return false, nil
+			}
+		case "labels":
+			if !sameStringSet(verified.LabelIDs, anyStringSlice(want)) {
+				return false, nil
+			}
+		case "assignees":
+			if !sameStringSet(verified.AssigneeIDs, anyStringSlice(want)) {
+				return false, nil
+			}
+		case "state":
+			if verified.StateID != fmt.Sprint(want) {
 				return false, nil
 			}
 		}
@@ -443,6 +554,10 @@ func (c planeClient) patchJSON(ctx context.Context, endpoint string, body any, o
 	return c.requestJSON(ctx, http.MethodPatch, endpoint, body, out, http.StatusOK)
 }
 
+func (c planeClient) deleteJSON(ctx context.Context, endpoint string, out any) *cliError {
+	return c.requestJSON(ctx, http.MethodDelete, endpoint, nil, out, http.StatusOK, http.StatusNoContent)
+}
+
 func (c planeClient) requestJSON(ctx context.Context, method, endpoint string, body any, out any, successStatuses ...int) *cliError {
 	if c.baseURL == "" {
 		return newError("MISSING_BASE_URL", "PLANE_BASE_URL is not configured.", "Set PLANE_BASE_URL or run: plane-cli config set base_url <url>", true)
@@ -494,6 +609,14 @@ func (c planeClient) requestJSON(ctx context.Context, method, endpoint string, b
 	}
 
 	switch resp.StatusCode {
+	case http.StatusTooManyRequests:
+		retryAfter := 0
+		if header := strings.TrimSpace(resp.Header.Get("Retry-After")); header != "" {
+			if parsed, err := strconv.Atoi(header); err == nil && parsed > 0 {
+				retryAfter = parsed
+			}
+		}
+		return newRateLimitError(retryAfter)
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
 		return newError("VALIDATION_FAILED", fmt.Sprintf("Plane API rejected the request with HTTP %d.", resp.StatusCode), "Check command flags and required Plane fields.", false)
 	case http.StatusUnauthorized:
@@ -519,16 +642,23 @@ func mapWorkItem(raw map[string]any, project projectSummary) workItemSummary {
 		readableID = projectIdentifier + "-" + sequenceID
 	}
 	stateID := stringFromMap(raw, "state_id", "state")
+	stateName := stringFromMap(raw, "state_name")
 	stateGroup := stringFromMap(raw, "state_group")
 	if state, ok := raw["state"].(map[string]any); ok {
 		if stateID == "" {
 			stateID = stringFromMap(state, "id")
+		}
+		if stateName == "" {
+			stateName = stringFromMap(state, "name")
 		}
 		stateGroup = stringFromMap(state, "group")
 	}
 	if state, ok := raw["state_detail"].(map[string]any); ok {
 		if stateID == "" {
 			stateID = stringFromMap(state, "id")
+		}
+		if stateName == "" {
+			stateName = stringFromMap(state, "name")
 		}
 		if stateGroup == "" {
 			stateGroup = stringFromMap(state, "group")
@@ -543,17 +673,50 @@ func mapWorkItem(raw map[string]any, project projectSummary) workItemSummary {
 		Name:              stringFromMap(raw, "name"),
 		DescriptionHTML:   stringFromMap(raw, "description_html"),
 		StateID:           stateID,
+		StateName:         stateName,
 		StateGroup:        stateGroup,
 		Priority:          stringFromMap(raw, "priority"),
 		AssigneeIDs:       stringSliceFromMap(raw, "assignees"),
 		LabelIDs:          stringSliceFromMap(raw, "labels"),
+		ParentID:          stringFromMap(raw, "parent_id", "parent"),
+		CreatedAt:         stringFromMap(raw, "created_at"),
+		UpdatedAt:         stringFromMap(raw, "updated_at"),
 	}
 }
 
 func mapComment(raw map[string]any) commentSummary {
+	authorID := ""
+	authorName := ""
+	if actor, ok := raw["actor"].(map[string]any); ok {
+		authorID = stringFromMap(actor, "id")
+		authorName = stringFromMap(actor, "display_name", "name", "email")
+	}
+	if user, ok := raw["user"].(map[string]any); ok {
+		if authorID == "" {
+			authorID = stringFromMap(user, "id")
+		}
+		if authorName == "" {
+			authorName = stringFromMap(user, "display_name", "name", "email")
+		}
+	}
+	html := stringFromMap(raw, "comment_html", "html", "body")
 	return commentSummary{
 		ID:          stringFromMap(raw, "id", "comment_id"),
-		CommentHTML: stringFromMap(raw, "comment_html", "html"),
+		CommentHTML: html,
+		Excerpt:     excerptPlainText(html, 120),
+		AuthorID:    firstNonEmpty(stringFromMap(raw, "author_id"), authorID),
+		AuthorName:  firstNonEmpty(stringFromMap(raw, "author_name"), authorName),
+		CreatedAt:   stringFromMap(raw, "created_at"),
+		UpdatedAt:   stringFromMap(raw, "updated_at"),
+		Permalink:   stringFromMap(raw, "permalink", "url"),
+	}
+}
+
+func mapRelation(raw map[string]any) relationSummary {
+	return relationSummary{
+		ID:                stringFromMap(raw, "id"),
+		RelationType:      stringFromMap(raw, "relation_type", "type"),
+		RelatedWorkItemID: stringFromMap(raw, "related_work_item", "related_work_item_id", "target"),
 	}
 }
 
