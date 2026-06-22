@@ -193,8 +193,37 @@ func (c planeClient) listWorkItems(ctx context.Context, project projectSummary, 
 	}
 	items := extractResultMaps(raw)
 	workItems := make([]workItemSummary, 0, len(items))
+	var stateGroupsByID map[string]string
+	statesLoaded := false
+	loadStateGroups := func(required bool) (map[string]string, *cliError) {
+		if statesLoaded {
+			return stateGroupsByID, nil
+		}
+		statesLoaded = true
+		states, err := c.listProjectStates(ctx, project.ID)
+		if err != nil {
+			if required {
+				return nil, err
+			}
+			return nil, nil
+		}
+		stateGroupsByID = make(map[string]string, len(states))
+		for _, state := range states {
+			if state.ID != "" && state.Group != "" {
+				stateGroupsByID[state.ID] = state.Group
+			}
+		}
+		return stateGroupsByID, nil
+	}
 	for _, item := range items {
 		mapped := mapWorkItem(item, project)
+		if mapped.StateGroup == "" && mapped.StateID != "" {
+			groups, err := loadStateGroups(stateGroup != "")
+			if err != nil {
+				return nil, err
+			}
+			mapped = workItemWithResolvedStateGroup(mapped, groups)
+		}
 		if stateGroup != "" && !sameRef(mapped.StateGroup, stateGroup) {
 			continue
 		}
@@ -204,6 +233,16 @@ func (c planeClient) listWorkItems(ctx context.Context, project projectSummary, 
 		}
 	}
 	return workItems, nil
+}
+
+func workItemWithResolvedStateGroup(item workItemSummary, stateGroupsByID map[string]string) workItemSummary {
+	if item.StateGroup != "" || item.StateID == "" {
+		return item
+	}
+	if group := stateGroupsByID[item.StateID]; group != "" {
+		item.StateGroup = group
+	}
+	return item
 }
 
 func (c planeClient) getWorkItemByRef(ctx context.Context, ref string) (workItemSummary, *cliError) {
