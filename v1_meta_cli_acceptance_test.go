@@ -170,8 +170,14 @@ func TestV1HelpDocumentsAgentCriticalWorkFlags(t *testing.T) {
 	res := runCLI(t, nil, "help")
 	res.assertExit(t, 0)
 	mustContain := []string{
-		"plane-cli work create --project <project> --title <title> [--description-html <html>] [--priority <priority>]",
-		"plane-cli work edit <PROJECT-123> [--title <title>] [--description-html <html>] [--priority <priority>]",
+		"plane-cli work create --project <project> --title <title>",
+		"plane-cli work edit <PROJECT-123>",
+		"plane-cli work comment <PROJECT-123>",
+		"plane-cli work comments <PROJECT-123>",
+		"--description-html <html>",
+		"--description-file <path>",
+		"--html-file <path>",
+		"--priority <priority>",
 		"plane-cli work start <PROJECT-123> [--reason <text>] [--evidence <text>] [--pr <url-or-number>]",
 		"plane-cli work complete <PROJECT-123> --evidence <text> [--reason <text>] [--pr <url-or-number>]",
 		"plane-cli work reopen <PROJECT-123> --reason <text> [--evidence <text>] [--pr <url-or-number>]",

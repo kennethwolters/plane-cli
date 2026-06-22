@@ -30,6 +30,7 @@ func currentVersionData() versionData {
 			"plane.work.create.v1",
 			"plane.work.edit.v1",
 			"plane.work.comment.v1",
+			"plane.work.comments.v1",
 			"plane.work.start.v1",
 			"plane.work.complete.v1",
 			"plane.work.reopen.v1",
