@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -21,7 +21,8 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	testBinary = filepath.Join(dir, "plane-cli")
-	cmd := exec.Command("go", "build", "-o", testBinary, ".")
+	cmd := exec.Command("go", "build", "-o", testBinary, "./cmd/plane-cli")
+	cmd.Dir = filepath.Join("..", "..")
 	cmd.Env = os.Environ()
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n%s", err, out)

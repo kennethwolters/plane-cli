@@ -9,11 +9,11 @@ The goal is a trusted Plane.so workflow tool with a fat agent skill and a thin C
 Download a release asset from GitHub Releases for your OS/architecture, verify it with `checksums.txt`, and put `plane-cli` on your `PATH`.
 
 ```sh
-curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.5.0/plane-cli_0.5.0_linux_amd64.tar.gz
-curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.5.0/checksums.txt
+curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.6.0/plane-cli_0.6.0_linux_amd64.tar.gz
+curl -LO https://github.com/kennethwolters/plane-cli/releases/download/v0.6.0/checksums.txt
 sha256sum --check --ignore-missing checksums.txt
-tar -xzf plane-cli_0.5.0_linux_amd64.tar.gz
-sudo install -m 0755 plane-cli_0.5.0_linux_amd64/plane-cli /usr/local/bin/plane-cli
+tar -xzf plane-cli_0.6.0_linux_amd64.tar.gz
+sudo install -m 0755 plane-cli_0.6.0_linux_amd64/plane-cli /usr/local/bin/plane-cli
 ```
 
 Supported release targets:
@@ -38,7 +38,16 @@ Config precedence is: process environment, explicit env file (`--env-file <path>
 ```sh
 mise install
 go test ./...
+go build -o bin/plane-cli ./cmd/plane-cli
 ```
+
+## Repository structure
+
+- `cmd/plane-cli`: process entry point and release build metadata
+- `internal/cli`: private command, configuration, Plane API, and output implementation
+- `docs`: design and command-surface specifications
+
+There is intentionally no `pkg` directory: the repository does not currently expose a reusable public Go library. New packages should represent cohesive concepts rather than mirror files or commands mechanically.
 
 ## V1 meta commands
 

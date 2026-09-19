@@ -176,7 +176,7 @@ Add a focused README/help consistency check only for command examples that are i
 ```sh
 go test ./... -run TestHelpIncludesAgentCriticalWorkFlags
 go test ./...
-go run . help
+go run ./cmd/plane-cli help
 ```
 
 ## #8: Support deterministic env-file discovery across worktrees and monorepos

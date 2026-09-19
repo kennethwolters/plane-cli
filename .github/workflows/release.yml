@@ -62,7 +62,7 @@ jobs:
             name="plane-cli_${version}_${goos}_${goarch}"
             rm -rf "build/${name}"
             mkdir -p "build/${name}"
-            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "$ldflags" -o "build/${name}/plane-cli" .
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "$ldflags" -o "build/${name}/plane-cli" ./cmd/plane-cli
             cp README.md LICENSE "build/${name}/"
             tar -C build -czf "dist/${name}.tar.gz" "${name}"
           done

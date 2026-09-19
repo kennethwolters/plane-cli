@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -15,14 +15,23 @@ const (
 	exitUsage = 2
 )
 
+// BuildInfo contains release metadata injected by the command at build time.
+type BuildInfo struct {
+	Version   string
+	Commit    string
+	BuildDate string
+}
+
 type app struct {
 	stdout io.Writer
 	stderr io.Writer
 	client *http.Client
+	build  BuildInfo
 }
 
-func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	a := app{stdout: stdout, stderr: stderr, client: http.DefaultClient}
+// Run executes plane-cli with explicit process dependencies and returns an exit code.
+func Run(ctx context.Context, args []string, stdout, stderr io.Writer, build BuildInfo) int {
+	a := app{stdout: stdout, stderr: stderr, client: http.DefaultClient, build: build}
 	global, rest, err := parseGlobalFlags(args)
 	if err != nil {
 		return a.writeCLIError(err, "text")
@@ -63,7 +72,7 @@ func (a app) run(ctx context.Context, args []string, configCtx configContext) in
 		return exitOK
 	}
 	if args[0] == "--version" || args[0] == "-version" {
-		fmt.Fprintln(a.stdout, version)
+		fmt.Fprintln(a.stdout, a.build.Version)
 		return exitOK
 	}
 

@@ -28,7 +28,7 @@ jobs:
 
       - name: Check formatting
         run: |
-          files="$(gofmt -l ./*.go)"
+          files="$(find . -type f -name '*.go' -print0 | xargs -0 gofmt -l)"
           if [ -n "$files" ]; then
             echo "$files"
             exit 1

@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"context"
@@ -34,7 +34,7 @@ func (a app) cmdDoctor(ctx context.Context, args []string, configCtx configConte
 
 	eff, cfgErr := loadEffectiveConfig(configCtx)
 	checks := []doctorCheck{
-		{Name: "binary", OK: true, Message: "plane-cli " + version},
+		{Name: "binary", OK: true, Message: "plane-cli " + a.build.Version},
 		{Name: "platform", OK: runtime.GOOS == "linux" || runtime.GOOS == "darwin", Message: runtime.GOOS + "/" + runtime.GOARCH, Fix: platformFix()},
 	}
 	checks = append(checks, doctorEnvFileChecks(configCtx)...)

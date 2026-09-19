@@ -1,4 +1,4 @@
-package main
+package cli
 
 import "fmt"
 
@@ -9,11 +9,11 @@ type versionData struct {
 	SupportedSchemas []string `json:"supported_schemas"`
 }
 
-func currentVersionData() versionData {
+func currentVersionData(build BuildInfo) versionData {
 	return versionData{
-		Version:   version,
-		Commit:    commit,
-		BuildDate: date,
+		Version:   build.Version,
+		Commit:    build.Commit,
+		BuildDate: build.BuildDate,
 		SupportedSchemas: []string{
 			"plane.version.v1",
 			"plane.config.v1",
@@ -52,7 +52,7 @@ func currentVersionData() versionData {
 }
 
 func (a app) cmdVersion(format string) int {
-	data := currentVersionData()
+	data := currentVersionData(a.build)
 	if format == "json" {
 		writeJSON(a.stdout, okEnvelope("plane.version.v1", data))
 		return exitOK
