@@ -43,6 +43,15 @@ All JSON commands use a stable envelope:
 }
 ```
 
+Provider-controlled output is bounded at the CLI seam:
+
+- human-readable metadata strings: at most 256 Unicode characters
+- detailed plain text: at most 4,096 Unicode characters
+- stable identifiers, timestamps, enums, URLs, and workspace slugs remain unchanged
+- JSON truncation includes a visible `…` and machine-readable `<field>_truncated` plus `<field>_original_runes`; text mode uses the visible marker
+- semantic reads omit provider editor HTML and binary collaboration payloads
+- mutation requests preserve exact input, while plans/results emit bounded plain-text summaries
+
 Errors use:
 
 ```json
@@ -147,7 +156,7 @@ plane-cli work activity <reference> [--limit <n>] [--format text|json]
 Output should normalize:
 
 - readable ID and UUIDs
-- title/description HTML summary
+- title and bounded plain-text description summary
 - project/state/state group
 - assignees, labels, priority
 - cycle/module membership

@@ -91,6 +91,8 @@ func (a app) run(ctx context.Context, args []string, configCtx configContext) in
 		return a.cmdState(ctx, args[1:], configCtx)
 	case "member":
 		return a.cmdMember(ctx, args[1:], configCtx)
+	case "page":
+		return a.cmdPage(ctx, args[1:], configCtx)
 	case "work":
 		return a.cmdWork(ctx, args[1:], configCtx)
 	case "search":
@@ -119,6 +121,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  plane-cli project get <project> [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli state list --project <project> [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli member list --project <project> [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli page list --project <project> [--format text|json]")
+	fmt.Fprintln(w, "  plane-cli page get <page-uuid-or-name> --project <project> [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli work list --project <project> [--state-group <group>] [--fields <csv>] [--description-excerpt <n>] [--include-comments-latest <n>] [--limit <n>] [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli work get <PROJECT-123> [--format text|json]")
 	fmt.Fprintln(w, "  plane-cli work create --project <project> --title <title> [--description-html <html>|--description-file <path>|--description-md-file <path>] [--priority <priority>] [--dedupe-query <query>] [--dry-run|--apply] [--verify] [--format text|json]")

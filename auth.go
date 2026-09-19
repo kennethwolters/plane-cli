@@ -50,7 +50,8 @@ func (a app) cmdAuthStatus(ctx context.Context, format string, configCtx configC
 		writeJSON(a.stdout, okEnvelope("plane.auth.status.v1", data))
 		return exitOK
 	}
-	fmt.Fprintf(a.stdout, "authenticated: true\nuser: %s\nworkspace_slug: %s\n", displayUser(me), eff.WorkspaceSlug.Value)
+	user, _ := boundOutputText(displayUser(me), maxOutputMetadataRunes)
+	fmt.Fprintf(a.stdout, "authenticated: true\nuser: %s\nworkspace_slug: %s\n", user, eff.WorkspaceSlug.Value)
 	return exitOK
 }
 

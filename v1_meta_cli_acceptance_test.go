@@ -110,6 +110,34 @@ func TestV1AuthStatusValidatesPATWithFakePlane(t *testing.T) {
 	}
 }
 
+func TestV1AuthStatusForbiddenExplainsPATAuthorizationModel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	res := runCLI(t, map[string]string{
+		"PLANE_API_KEY":        "valid-but-unauthorized-pat",
+		"PLANE_BASE_URL":       server.URL,
+		"PLANE_WORKSPACE_SLUG": "development",
+	}, "auth", "status", "--format", "json")
+	res.assertExit(t, 1)
+
+	env := parseEnvelope(t, res.stdout)
+	errObj := env["error"].(map[string]any)
+	if errObj["code"] != "INSUFFICIENT_PERMISSIONS" {
+		t.Fatalf("error code = %v, want INSUFFICIENT_PERMISSIONS", errObj["code"])
+	}
+	message := errObj["message"].(string)
+	fix := errObj["fix"].(string)
+	if !strings.Contains(message, "account is not authorized") {
+		t.Fatalf("message does not distinguish account authorization: %q", message)
+	}
+	if !strings.Contains(fix, "PATs do not have separate roles or scopes") || !strings.Contains(fix, "workspace membership and project role") {
+		t.Fatalf("fix misstates Plane PAT authorization: %q", fix)
+	}
+}
+
 func TestV1DoctorForAgentIsActionable(t *testing.T) {
 	const apiKey = "doctor-secret"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

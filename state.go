@@ -52,7 +52,8 @@ func (a app) cmdStateList(ctx context.Context, format string, configCtx configCo
 		return exitOK
 	}
 	for _, state := range states {
-		fmt.Fprintf(a.stdout, "%s\t%s\t%s\t%s\n", state.Group, state.Name, state.ID, state.Color)
+		name, _ := boundOutputText(state.Name, maxOutputMetadataRunes)
+		fmt.Fprintf(a.stdout, "%s\t%s\t%s\t%s\n", state.Group, name, state.ID, state.Color)
 	}
 	return exitOK
 }

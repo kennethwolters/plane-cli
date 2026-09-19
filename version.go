@@ -25,6 +25,8 @@ func currentVersionData() versionData {
 			"plane.project.get.v1",
 			"plane.state.list.v1",
 			"plane.member.list.v1",
+			"plane.page.list.v1",
+			"plane.page.get.v1",
 			"plane.work.list.v1",
 			"plane.work.get.v1",
 			"plane.work.create.v1",

@@ -622,7 +622,12 @@ func (c planeClient) requestJSON(ctx context.Context, method, endpoint string, b
 	case http.StatusUnauthorized:
 		return newError("INVALID_API_KEY", "Plane API key is invalid or revoked.", "Regenerate the token in Plane settings and set PLANE_API_KEY.", true)
 	case http.StatusForbidden:
-		return newError("INSUFFICIENT_PERMISSIONS", "Plane API key does not have sufficient permissions.", "Check your Plane workspace/project role or token scope.", true)
+		return newError(
+			"INSUFFICIENT_PERMISSIONS",
+			"Plane authenticated the PAT, but the account is not authorized for this resource.",
+			"Plane PATs do not have separate roles or scopes. Check the authenticated user's workspace membership and project role, then retry.",
+			true,
+		)
 	case http.StatusNotFound:
 		return newError("RESOURCE_NOT_FOUND", "Plane resource was not found.", "Check workspace slug, identifiers, and base URL.", true)
 	default:

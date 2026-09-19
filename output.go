@@ -3,6 +3,13 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"strings"
+	"unicode/utf8"
+)
+
+const (
+	maxOutputMetadataRunes = 256
+	maxOutputDetailRunes   = 4096
 )
 
 type successEnvelope struct {
@@ -55,5 +62,89 @@ func newRateLimitError(retryAfterSeconds int) *cliError {
 func writeJSON(w io.Writer, v any) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(v)
+	_ = enc.Encode(sanitizeAgentOutput(v))
+}
+
+func sanitizeAgentOutput(value any) any {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return value
+	}
+	var decoded any
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		return value
+	}
+	return sanitizeJSONValue(decoded)
+}
+
+func sanitizeJSONValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return sanitizeJSONMap(typed)
+	case []any:
+		out := make([]any, len(typed))
+		for i, item := range typed {
+			out[i] = sanitizeJSONValue(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func sanitizeJSONMap(input map[string]any) map[string]any {
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		if (key == "description_html" || key == "comment_html") && value != nil {
+			html := stringValue(value)
+			textKey := strings.TrimSuffix(key, "_html") + "_text"
+			text := stripHTML(html)
+			bounded, truncated := boundOutputText(text, maxOutputDetailRunes)
+			out[textKey] = bounded
+			out[textKey+"_original_runes"] = utf8.RuneCountInString(text)
+			if truncated {
+				out[textKey+"_truncated"] = true
+			}
+			continue
+		}
+		if text, ok := value.(string); ok {
+			if limit, boundedField := outputTextLimit(key); boundedField {
+				bounded, truncated := boundOutputText(text, limit)
+				out[key] = bounded
+				if truncated {
+					out[key+"_truncated"] = true
+					out[key+"_original_runes"] = utf8.RuneCountInString(text)
+				}
+				continue
+			}
+		}
+		out[key] = sanitizeJSONValue(value)
+	}
+	return out
+}
+
+func outputTextLimit(key string) (int, bool) {
+	switch key {
+	case "name", "display_name", "first_name", "last_name", "author_name", "title":
+		return maxOutputMetadataRunes, true
+	case "description_text", "comment_text", "excerpt":
+		return maxOutputDetailRunes, true
+	default:
+		return 0, false
+	}
+}
+
+func boundOutputText(text string, limit int) (string, bool) {
+	if limit < 1 || utf8.RuneCountInString(text) <= limit {
+		return text, false
+	}
+	runes := []rune(text)
+	return string(runes[:limit-1]) + "…", true
+}
+
+func stringValue(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
 }

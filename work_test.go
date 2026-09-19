@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func TestStripHTMLNormalizesText(t *testing.T) {
+	cases := []struct {
+		name string
+		html string
+		want string
+	}{
+		{name: "nested tags and whitespace", html: "<p>Hello <strong>world</strong></p>\n<p>Next</p>", want: "Hello world Next"},
+		{name: "escaped angle brackets", html: "<p>Use &lt;tag&gt; &amp; continue</p>", want: "Use <tag> & continue"},
+		{name: "named and numeric entities", html: "<p>&copy; &#9731; &quot;ok&quot;</p>", want: `© ☃ "ok"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stripHTML(tc.html); got != tc.want {
+				t.Fatalf("stripHTML() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestPreserveWorkItemIdentity(t *testing.T) {
 	original := workItemSummary{
 		ProjectIdentifier: "BACKEND",

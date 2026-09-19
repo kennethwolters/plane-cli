@@ -28,7 +28,7 @@ func TestIssue10WorkEditAppendDescriptionDryRunShowsBeforeAfter(t *testing.T) {
 	operation := data["operation"].(map[string]any)
 	before := operation["before"].(map[string]any)
 	after := operation["after"].(map[string]any)
-	if before["description_html"] != "<p>OAuth bug</p>" || after["description_html"] != "<p>OAuth bug</p><hr><p>Follow-up</p>" {
+	if before["description_text"] != "OAuth bug" || after["description_text"] != "OAuth bug Follow-up" {
 		t.Fatalf("unexpected before/after: %#v / %#v", before, after)
 	}
 }
@@ -46,7 +46,7 @@ func TestIssue10WorkListCompactFieldsAndLatestComments(t *testing.T) {
 		t.Fatalf("unexpected items: %#v", items)
 	}
 	first := items[0].(map[string]any)
-	if first["description_excerpt"] != "OAuth bug wi" {
+	if first["description_excerpt"] != "OAuth bug w…" {
 		t.Fatalf("unexpected excerpt: %#v", first)
 	}
 	comments := first["latest_comments"].([]any)

@@ -52,7 +52,9 @@ func (a app) cmdMemberList(ctx context.Context, format string, configCtx configC
 		return exitOK
 	}
 	for _, member := range members {
-		fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", member.ID, member.Email, member.DisplayName)
+		email, _ := boundOutputText(member.Email, maxOutputMetadataRunes)
+		displayName, _ := boundOutputText(member.DisplayName, maxOutputMetadataRunes)
+		fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", member.ID, email, displayName)
 	}
 	return exitOK
 }

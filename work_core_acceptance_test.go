@@ -155,7 +155,7 @@ func TestIssue10WorkFileInputsDryRunDoesNotMutate(t *testing.T) {
 				return []string{"work", "create", "--project", "BACKEND", "--title", "New task", "--description-file", path, "--format", "json"}
 			},
 			schema:       "plane.work.create.v1",
-			changedField: "description_html",
+			changedField: "description_text",
 		},
 		{
 			name: "edit description file",
@@ -163,7 +163,7 @@ func TestIssue10WorkFileInputsDryRunDoesNotMutate(t *testing.T) {
 				return []string{"work", "edit", "BACKEND-42", "--description-file", path, "--format", "json"}
 			},
 			schema:       "plane.work.edit.v1",
-			changedField: "description_html",
+			changedField: "description_text",
 		},
 		{
 			name: "comment html file",
@@ -171,7 +171,7 @@ func TestIssue10WorkFileInputsDryRunDoesNotMutate(t *testing.T) {
 				return []string{"work", "comment", "BACKEND-42", "--html-file", path, "--format", "json"}
 			},
 			schema:       "plane.work.comment.v1",
-			changedField: "comment_html",
+			changedField: "comment_text",
 		},
 	}
 	for _, tc := range cases {
@@ -193,8 +193,8 @@ func TestIssue10WorkFileInputsDryRunDoesNotMutate(t *testing.T) {
 				t.Fatalf("unexpected mutation state: %#v", data)
 			}
 			changes := data["operation"].(map[string]any)["changes"].(map[string]any)
-			if changes[tc.changedField] != "<p>From file</p>" {
-				t.Fatalf("file body was not reflected in operation: %#v", changes)
+			if changes[tc.changedField] != "From file" {
+				t.Fatalf("file body was not reflected as safe plain text in operation: %#v", changes)
 			}
 			if mutations.createPosts != 0 || mutations.editPatches != 0 || mutations.commentPosts != 0 {
 				t.Fatalf("dry-run mutated server: %#v", mutations)
@@ -308,7 +308,7 @@ func TestIssue10WorkCommentsListJSONContract(t *testing.T) {
 		t.Fatalf("unexpected comments: %#v", comments)
 	}
 	first := comments[0].(map[string]any)
-	if first["id"] != "comment-1" || first["comment_html"] != "<p>First</p>" {
+	if first["id"] != "comment-1" || first["comment_text"] != "First" {
 		t.Fatalf("unexpected first comment: %#v", first)
 	}
 }

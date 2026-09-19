@@ -50,13 +50,19 @@ func (a app) cmdProjectList(ctx context.Context, format string, configCtx config
 	if err != nil {
 		return a.writeCLIError(err, format)
 	}
-	data := projectListData{WorkspaceSlug: eff.WorkspaceSlug.Value, Projects: projects, Count: len(projects)}
+	outputProjects := make([]projectSummary, len(projects))
+	copy(outputProjects, projects)
+	for i := range outputProjects {
+		outputProjects[i].DescriptionText = ""
+	}
+	data := projectListData{WorkspaceSlug: eff.WorkspaceSlug.Value, Projects: outputProjects, Count: len(projects)}
 	if format == "json" {
 		writeJSON(a.stdout, okEnvelope("plane.project.list.v1", data))
 		return exitOK
 	}
 	for _, project := range projects {
-		fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", project.Identifier, project.ID, project.Name)
+		name, _ := boundOutputText(project.Name, maxOutputMetadataRunes)
+		fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", project.Identifier, project.ID, name)
 	}
 	return exitOK
 }
@@ -75,7 +81,8 @@ func (a app) cmdProjectGet(ctx context.Context, format string, configCtx configC
 		writeJSON(a.stdout, okEnvelope("plane.project.get.v1", data))
 		return exitOK
 	}
-	fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", project.Identifier, project.ID, project.Name)
+	name, _ := boundOutputText(project.Name, maxOutputMetadataRunes)
+	fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", project.Identifier, project.ID, name)
 	return exitOK
 }
 

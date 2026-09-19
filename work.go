@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	htmlstd "html"
 	"os"
 	"sort"
 	"strconv"
@@ -152,8 +153,8 @@ func (a app) cmdWorkList(ctx context.Context, format string, configCtx configCon
 	excerptLimit := 0
 	if excerptText != "" {
 		parsed, err := strconv.Atoi(excerptText)
-		if err != nil || parsed < 1 {
-			return a.writeCLIError(newError("VALIDATION_FAILED", "--description-excerpt must be a positive integer.", "Use a positive integer such as --description-excerpt 300.", false), format)
+		if err != nil || parsed < 1 || parsed > maxOutputDetailRunes {
+			return a.writeCLIError(newError("VALIDATION_FAILED", "--description-excerpt must be between 1 and 4096 Unicode characters.", "Use a bounded value such as --description-excerpt 300.", false), format)
 		}
 		excerptLimit = parsed
 	}
@@ -177,13 +178,9 @@ func (a app) cmdWorkList(ctx context.Context, format string, configCtx configCon
 	if err != nil {
 		return a.writeCLIError(err, format)
 	}
-	var outputItems any = items
-	if fieldsText != "" || excerptLimit > 0 || latestComments > 0 {
-		projected, err := client.projectWorkItemsForList(ctx, items, parseCSV(fieldsText), excerptLimit, latestComments)
-		if err != nil {
-			return a.writeCLIError(err, format)
-		}
-		outputItems = projected
+	outputItems, err := client.projectWorkItemsForList(ctx, items, parseCSV(fieldsText), excerptLimit, latestComments)
+	if err != nil {
+		return a.writeCLIError(err, format)
 	}
 	data := workListData{WorkspaceSlug: eff.WorkspaceSlug.Value, Project: project, WorkItems: outputItems, Count: len(items)}
 	if format == "json" {
@@ -191,7 +188,8 @@ func (a app) cmdWorkList(ctx context.Context, format string, configCtx configCon
 		return exitOK
 	}
 	for _, item := range items {
-		fmt.Fprintf(a.stdout, "%s\t%s\t%s\t%s\n", item.ReadableID, item.StateGroup, item.WorkItemID, item.Name)
+		name, _ := boundOutputText(item.Name, maxOutputMetadataRunes)
+		fmt.Fprintf(a.stdout, "%s\t%s\t%s\t%s\n", item.ReadableID, item.StateGroup, item.WorkItemID, name)
 	}
 	return exitOK
 }
@@ -210,7 +208,8 @@ func (a app) cmdWorkGet(ctx context.Context, format string, configCtx configCont
 		writeJSON(a.stdout, okEnvelope("plane.work.get.v1", data))
 		return exitOK
 	}
-	fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", item.ReadableID, item.StateGroup, item.Name)
+	name, _ := boundOutputText(item.Name, maxOutputMetadataRunes)
+	fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", item.ReadableID, item.StateGroup, name)
 	return exitOK
 }
 
@@ -250,7 +249,8 @@ func (a app) cmdWorkComments(ctx context.Context, format string, configCtx confi
 		return exitOK
 	}
 	for _, comment := range comments {
-		fmt.Fprintf(a.stdout, "%s\t%s\n", comment.ID, comment.CommentHTML)
+		text, _ := boundOutputText(stripHTML(comment.CommentHTML), maxOutputDetailRunes)
+		fmt.Fprintf(a.stdout, "%s\t%s\n", comment.ID, text)
 	}
 	return exitOK
 }
@@ -771,7 +771,8 @@ func (a app) cmdWorkChildren(ctx context.Context, format string, configCtx confi
 		return exitOK
 	}
 	for _, child := range children {
-		fmt.Fprintf(a.stdout, "%s\t%s\n", child.ReadableID, child.Name)
+		name, _ := boundOutputText(child.Name, maxOutputMetadataRunes)
+		fmt.Fprintf(a.stdout, "%s\t%s\n", child.ReadableID, name)
 	}
 	return exitOK
 }
@@ -1388,10 +1389,11 @@ func markdownToHTML(markdown string) string {
 
 func excerptPlainText(html string, limit int) string {
 	text := stripHTML(html)
-	if limit > 0 && len(text) > limit {
-		return text[:limit]
+	if limit <= 0 {
+		return text
 	}
-	return text
+	bounded, _ := boundOutputText(text, limit)
+	return bounded
 }
 
 func stripHTML(html string) string {
@@ -1429,8 +1431,7 @@ func stripHTML(html string) string {
 }
 
 func htmlEntityText(text string) string {
-	replacer := strings.NewReplacer("&nbsp;", " ", "&amp;", "&", "&lt;", "<", "&gt;", ">", "&quot;", `"`, "&#39;", "'")
-	return replacer.Replace(text)
+	return htmlstd.UnescapeString(text)
 }
 
 func firstNonEmpty(values ...string) string {

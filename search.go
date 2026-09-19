@@ -21,7 +21,7 @@ type searchResult struct {
 	WorkItemID        string `json:"work_item_id"`
 	SequenceID        string `json:"sequence_id,omitempty"`
 	Name              string `json:"name"`
-	DescriptionHTML   string `json:"description_html,omitempty"`
+	DescriptionHTML   string `json:"-"`
 	StateID           string `json:"state_id,omitempty"`
 	StateName         string `json:"state_name,omitempty"`
 	StateGroup        string `json:"state_group,omitempty"`
@@ -96,7 +96,8 @@ func (a app) cmdSearch(ctx context.Context, args []string, configCtx configConte
 		return exitOK
 	}
 	for _, item := range items {
-		fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", item.ReadableID, item.StateGroup, item.Name)
+		name, _ := boundOutputText(item.Name, maxOutputMetadataRunes)
+		fmt.Fprintf(a.stdout, "%s\t%s\t%s\n", item.ReadableID, item.StateGroup, name)
 	}
 	return exitOK
 }
@@ -170,7 +171,7 @@ func matchWorkItem(item workItemSummary, needle string) (searchResult, bool) {
 	case strings.Contains(strings.ToLower(item.Name), needle):
 		return newSearchResult(item, "name", item.Name), true
 	case strings.Contains(strings.ToLower(stripHTML(item.DescriptionHTML)), needle):
-		return newSearchResult(item, "description_html", excerptPlainText(item.DescriptionHTML, 160)), true
+		return newSearchResult(item, "description_text", excerptPlainText(item.DescriptionHTML, 160)), true
 	default:
 		return searchResult{}, false
 	}
